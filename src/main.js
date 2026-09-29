@@ -35,8 +35,18 @@ function pantallaAcceso(mensaje = '') {
   });
 }
 
+// Si Google o Supabase rechazan el acceso, vuelven con el error en la dirección: se muestra y se limpia.
+function errorDeAcceso() {
+  const p = new URLSearchParams(location.search + '&' + location.hash.replace(/^#/, ''));
+  const msg = p.get('error_description') || p.get('error');
+  if (msg) history.replaceState(null, '', location.pathname);
+  return msg ? `No se pudo entrar: ${msg.replace(/\+/g, ' ')}. Si sigue pasando, avisa a quien administra el tablero.` : '';
+}
+
 async function iniciar() {
   if (modoEjemplo) { usuario = { email: 'modo de ejemplo' }; return armar(); }
+  const error = errorDeAcceso();
+  if (error) return pantallaAcceso(error);
   const { data } = await supabase.auth.getSession();
   await decidir(data.session);
   supabase.auth.onAuthStateChange((evento, sesion) => {
