@@ -1,9 +1,9 @@
 // Script de Google Ads → Tablero WIP.
 // Se pega en Google Ads (cuenta Wip 609-428-5378): Herramientas > Acciones masivas > Secuencias de comandos.
 // Programarlo "Diariamente". Cada vez envía los últimos DIAS días por campaña a n8n (F14), que los guarda en Supabase.
-// Para cargar el histórico la primera vez, cambiar DIAS a 540, ejecutarlo una vez y volver a dejarlo en 90.
+// Se reenvía año y medio completo cada día: son pocas filas y así el histórico queda cargado desde la primera ejecución.
 var WEBHOOK = 'https://wiptool.app.n8n.cloud/webhook/gads-7c1e4b9a2f6d48e3a51c';
-var DIAS = 90;
+var DIAS = 540;
 
 function main() {
   var cuenta = AdsApp.currentAccount();
