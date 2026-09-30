@@ -78,7 +78,7 @@ const f12 = {
     http('a1f0c0de-0014-4000-8000-000000000014', 'Consultar Brevo', [500, 700], {
       parameters: { authentication: 'genericCredentialType', genericAuthType: 'httpHeaderAuth' },
       credentials: CRED.brevo }),
-    codigo('a1f0c0de-0015-4000-8000-000000000015', 'Filas Brevo', [740, 700], 'filas.js', true, { __TRABAJOS__: 'Trabajos Brevo' }),
+    codigo('a1f0c0de-0015-4000-8000-000000000015', 'Filas Brevo', [740, 700], 'filas-brevo.js', false),
 
     codigoTexto('a1f0c0de-0016-4000-8000-000000000016', 'Trabajos Explee', [260, 900], EXPLEE['Trabajos Explee']),
     http('a1f0c0de-0017-4000-8000-000000000017', 'Campañas Explee', [420, 900], {
