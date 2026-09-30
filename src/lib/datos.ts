@@ -51,3 +51,25 @@ export interface CostoFijo {
   id: number; plataforma: string; monto: number; moneda: 'COP' | 'USD'; desde: string; hasta: string | null; nota: string;
   actualizado_por: string; actualizado: string;
 }
+
+export interface Email {
+  kpis: Kpis;
+  serie: { fecha: string; enviados: number; aperturas: number; clics: number }[];
+  secuencias: { secuencia: string; enviados: number; entregados: number; aperturas: number; clics: number; tasa_apertura: number | null; tasa_clics: number | null }[];
+  correos: { asunto: string; secuencia: string; enviados: number; aperturas: number; clics: number; tasa_apertura: number | null }[];
+  campanas: { fecha: string; campana: string; enviados: number; entregados: number; aperturas: number; clics: number; desuscritos: number; tasa_apertura: number | null; tasa_clics: number | null }[];
+  clics_desde_correos: { correo: string; clic_a: string; clics: number; personas: number }[];
+  visitas_desde_correos: { correo: string; visitas: number; conversiones: number }[];
+}
+export interface Prospeccion {
+  kpis: Kpis;
+  serie: { fecha: string; enviados: number; respuestas: number }[];
+  campanas: { campana: string; enviados: number; respuestas: number; leads: number; tasa_respuesta: number | null; gasto: number; costo_lead: number | null }[];
+  leads: { fecha: string | null; campana: string; empresa: string; cargo: string; pais: string; nombre: string; correo: string; telefono: string; linkedin: string; motivo: string }[];
+  agenda_por_campana: { campana: string; clics: number; personas: number }[];
+  visitas_por_campana: { campana: string; visitas: number; conversiones: number }[];
+}
+export interface Accionador {
+  id: number; plataforma: string; tipo: string; accionador: string; enlace: string; que_hace: string; donde_se_ve: string;
+  donde_se_usa: string; actualizado_por: string; actualizado: string;
+}

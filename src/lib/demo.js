@@ -195,3 +195,44 @@ function pauta({ p_desde, p_hasta }) {
 function inversion(p) { const k = pauta(p).kpis; return { total: k.total, total_ant: k.total_ant }; }
 demo.tablero_pauta = pauta;
 demo.tablero_inversion = inversion;
+
+// T3: email marketing y prospección (ejemplo).
+function email({ p_desde, p_hasta }) {
+  const f = dias(p_desde, p_hasta);
+  const serie = f.map((fecha) => { const x = azar('e' + fecha)(); const env = Math.round(20 + x * 30); return { fecha, enviados: env, aperturas: Math.round(env * (0.3 + x * 0.2)), clics: Math.round(env * 0.04) }; });
+  const s = (k) => serie.reduce((a, x) => a + x[k], 0);
+  const enviados = s('enviados'), aperturas = s('aperturas'), clics = s('clics'), entregados = Math.round(enviados * 0.98);
+  const secs = [['Nutrición - Wip equipos', 0.55], ['Pymes - Info solicitada', 0.3], ['Pymes - Demo solicitada', 0.1], ['Pymes - Demo completada', 0.05]];
+  return {
+    kpis: { enviados, enviados_ant: Math.round(enviados * 0.9), entregados, entregados_ant: Math.round(entregados * 0.9), aperturas, aperturas_ant: Math.round(aperturas * 0.85),
+      clics, clics_ant: Math.round(clics * 1.1), inversion: Math.round(17 * 4100 / 30 * f.length), inversion_ant: Math.round(17 * 4100 / 30 * f.length) },
+    serie,
+    secuencias: secs.map(([secuencia, p]) => ({ secuencia, enviados: Math.round(enviados * p), entregados: Math.round(entregados * p), aperturas: Math.round(aperturas * p),
+      clics: Math.round(clics * p), tasa_apertura: aperturas / entregados, tasa_clics: clics / entregados })),
+    correos: secs.map(([secuencia, p], i) => ({ asunto: ['Excel, WhatsApp y llamadas para manejar tus servicios', 'Tus servicios están a punto de cambiar🚀', 'Tu sesión en vivo de WIP está confirmada 📅', 'Lo que siempre nos preguntan en Wip'][i],
+      secuencia, enviados: Math.round(enviados * p), aperturas: Math.round(aperturas * p), clics: Math.round(clics * p), tasa_apertura: aperturas / entregados })),
+    campanas: [],
+    clics_desde_correos: [{ correo: 'info-2', clic_a: 'Agenda', clics: 3, personas: 3 }, { correo: 'nutricion-1', clic_a: 'WhatsApp', clics: 2, personas: 2 }],
+    visitas_desde_correos: [{ correo: 'nutricion-wip-equipos-1', visitas: 9, conversiones: 1 }, { correo: 'info-solicitada-3', visitas: 4, conversiones: 0 }],
+  };
+}
+function prospeccion({ p_desde, p_hasta }) {
+  const f = dias(p_desde, p_hasta);
+  const serie = f.map((fecha) => { const x = azar('x' + fecha)(); return { fecha, enviados: Math.round(80 + x * 60), respuestas: Math.round(x * 2) }; });
+  const enviados = serie.reduce((a, x) => a + x.enviados, 0), respuestas = serie.reduce((a, x) => a + x.respuestas, 0);
+  const gasto = Math.round(enviados * 0.03 * 4100);
+  return {
+    kpis: { enviados, enviados_ant: Math.round(enviados * 0.8), respuestas, respuestas_ant: Math.round(respuestas * 0.7), gasto, gasto_ant: Math.round(gasto * 0.8), leads: 4, leads_ant: 3 },
+    serie,
+    campanas: [
+      { campana: 'assistance and services companies', enviados: Math.round(enviados * 0.6), respuestas: Math.round(respuestas * 0.7), leads: 3, tasa_respuesta: 0.011, gasto: Math.round(gasto * 0.6), costo_lead: Math.round(gasto * 0.2) },
+      { campana: 'Industrial field contractors', enviados: Math.round(enviados * 0.4), respuestas: Math.round(respuestas * 0.3), leads: 1, tasa_respuesta: 0.008, gasto: Math.round(gasto * 0.4), costo_lead: Math.round(gasto * 0.4) },
+    ],
+    leads: [{ fecha: p_hasta, campana: 'assistance and services companies', empresa: 'Asistencias del Norte', cargo: 'Gerente de operaciones', pais: 'Colombia',
+      nombre: 'Persona de ejemplo', correo: 'ejemplo@empresa.com', telefono: '', linkedin: 'https://www.linkedin.com/in/ejemplo', motivo: 'Nos interesa, ¿podemos agendar una demo la otra semana?' }],
+    agenda_por_campana: [{ campana: 'asistencias', clics: 2, personas: 2 }],
+    visitas_por_campana: [{ campana: 'asistencias', visitas: 6, conversiones: 1 }, { campana: 'industrial', visitas: 3, conversiones: 0 }],
+  };
+}
+demo.tablero_email = email;
+demo.tablero_prospeccion = prospeccion;

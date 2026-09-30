@@ -1,4 +1,4 @@
-// Páginas del tablero. Las "pronto" llegan en las siguientes etapas del plan (T2 a T4).
+// Páginas del tablero. Las "próximas" llegan en las siguientes etapas del plan.
 export interface Pagina { id: string; titulo: string; sub: string; etapa?: string; puntos?: string[] }
 
 export const PAGINAS: Pagina[] = [
@@ -7,7 +7,10 @@ export const PAGINAS: Pagina[] = [
   { id: 'seo', titulo: 'SEO sitio web', sub: 'Cómo nos encuentran en Google: wiptool.com' },
   { id: 'seo-plataforma', titulo: 'SEO plataforma', sub: 'Cómo nos encuentran en Google: platform.wiptool.com' },
   { id: 'pauta', titulo: 'Pauta', sub: 'Meta Ads, Google Ads e inversión total en pesos' },
+  { id: 'email', titulo: 'Email marketing', sub: 'Correos de Brevo: automatizaciones, campañas y clics' },
+  { id: 'prospeccion', titulo: 'Prospección', sub: 'Correos en frío de Explee: respuestas, leads calientes y costo' },
   { id: 'costos', titulo: 'Costos fijos', sub: 'Suscripciones que suman a la inversión (Brevo y demás)' },
+  { id: 'accionadores', titulo: 'Accionadores', sub: 'Enlaces medidos, eventos y datos que suman información en Analytics' },
 ];
 
 export const PROXIMAS: Pagina[] = [
@@ -15,17 +18,6 @@ export const PROXIMAS: Pagina[] = [
     'Oportunidades por etapa: nuevo, calificado, reunión agendada, reunión hecha, cliente',
     'Costo por reunión y por cliente según el origen',
     'Tiempo promedio entre etapas'] },
-  { id: 'email', titulo: 'Email marketing', etapa: 'T3', sub: 'Brevo conectado directo por su API', puntos: [
-    'Enviados, aperturas y clics por automatización y por correo',
-    'Clics desde los correos a WhatsApp y a la agenda',
-    'Inversión en Brevo'] },
-  { id: 'prospeccion', titulo: 'Prospección', etapa: 'T3', sub: 'Explee conectado directo por su API', puntos: [
-    'Correos, respuestas, leads calientes y gasto por campaña',
-    'Visitas y clics a la agenda desde cada campaña',
-    'Costo por lead caliente'] },
-  { id: 'accionadores', titulo: 'Accionadores', etapa: 'T3', sub: 'Referencia de todo lo que suma datos en Analytics, editable desde el tablero', puntos: [
-    'Enlaces medidos, eventos del sitio y datos personalizados',
-    'Plataforma donde se usa cada uno, con su enlace listo para copiar'] },
 ];
 
 export const buscarPagina = (id: string) => [...PAGINAS, ...PROXIMAS].find((p) => p.id === id);

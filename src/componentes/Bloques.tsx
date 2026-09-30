@@ -62,6 +62,7 @@ export function Cifras({ items }: { items: Cifra[] }) {
                 vs. periodo anterior ({f(c.anterior)})
               </span>
             )}
+            {!d && c.nota && <span className={`text-[12.5px] ${c.principal ? 'text-white/70 dark:text-suave' : 'text-suave'}`}>{c.nota}</span>}
           </div>
         );
       })}

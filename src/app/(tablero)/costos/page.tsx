@@ -1,8 +1,8 @@
 import type { Metadata } from 'next';
 import { Encabezado, Tarjeta, Rejilla } from '@/componentes/Bloques';
 import { FormularioCosto } from '@/componentes/FormularioCosto';
-import { terminarCosto } from './acciones';
-import { BotonEliminarCosto } from '@/componentes/BotonEliminarCosto';
+import { terminarCosto, eliminarCosto } from './acciones';
+import { BotonEliminar } from '@/componentes/BotonEliminar';
 import { clienteServidor } from '@/lib/supabase/servidor';
 import { MODO_EJEMPLO } from '@/lib/config';
 import { type CostoFijo } from '@/lib/datos';
@@ -45,7 +45,8 @@ export default async function PaginaCostos() {
               <button type="submit" className={boton} title="Deja de sumar a la inversión a partir de mañana">Terminar hoy</button>
             </form>
           )}
-          <BotonEliminarCosto id={c.id} plataforma={c.plataforma} />
+          <BotonEliminar accion={eliminarCosto} id={c.id} titulo="Lo borra también de los meses anteriores"
+            pregunta={`¿Eliminar ${c.plataforma}? Se quita de la inversión de todos los meses. Si solo dejaron de pagarlo, usa "Terminar hoy".`} />
         </div>
       </td>
     </tr>
