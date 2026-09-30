@@ -6,7 +6,10 @@ import { pct, pos, esc, fechaLarga } from '../formato.js';
 
 function pagina({ id, sitio, titulo, sub }) {
   const corta = (url) => {
-    const ruta = String(url).replace(/^https?:\/\/[^/]+/, '') || '/';
+    // Del dominio principal se muestra solo la ruta; de cualquier otra variante (sin www, http…), la dirección completa.
+    const u = String(url);
+    const principal = /^https:\/\/(www\.wiptool\.com|platform\.wiptool\.com)(\/|$)/.test(u);
+    const ruta = principal ? u.replace(/^https:\/\/[^/]+/, '') || '/' : u.replace(/^https:\/\//, '');
     return `<a href="${esc(url)}" target="_blank" rel="noopener">${esc(ruta)}</a>`;
   };
   return {
