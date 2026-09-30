@@ -1,7 +1,7 @@
 // Modo de ejemplo: cifras inventadas con la misma forma que devuelven las funciones de Supabase.
 // Se usa mientras no hay base conectada. Son deterministas (la misma fecha da siempre el mismo número)
 // para que el periodo anterior y los cambios se vean coherentes.
-import { sumarDias, diasEntre, hoyBogota, anterior } from './rango.js';
+import { sumarDias, diasEntre, hoyBogota, anterior } from './rango';
 
 function azar(semilla) {
   let h = 2166136261;
