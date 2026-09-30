@@ -34,8 +34,8 @@ Se conecta al proyecto de Supabase `tablero-wip` (la dirección y la clave publi
 1. **Supabase:** proyecto `tablero-wip` en East US. En el editor SQL, correr `001_esquema.sql` y luego `002_funciones.sql`.
 2. **Google Cloud (misha@wiptool.com):** proyecto `tablero-wip` con:
    - la API de datos de Google Analytics y la API de Search Console activadas;
-   - una cuenta de servicio `tablero-carga`, agregada como lectora en la propiedad de Analytics y como usuaria en Search Console;
+   - un cliente OAuth "n8n (carga del tablero)" con retorno `https://oauth.n8n.cloud/oauth2/callback`, para que n8n lea con la cuenta de misha (credencial Google OAuth2 API con scopes analytics.readonly y webmasters.readonly);
    - un cliente OAuth (aplicación web) con la URL de retorno `https://<proyecto>.supabase.co/auth/v1/callback`, que se pega en Supabase > Authentication > Providers > Google.
 3. **Supabase > Authentication > URL Configuration:** Site URL `https://tablero.wiptool.com`, y en Redirect URLs también `http://localhost:5174`.
-4. **Vercel:** proyecto nuevo desde este repositorio, con las variables `VITE_SUPABASE_URL` y `VITE_SUPABASE_ANON_KEY`, y el dominio `tablero.wiptool.com` (un registro CNAME en Route 53 hacia Vercel).
-5. **n8n:** flujo F12 con la cuenta de servicio de Google y la clave de servicio de Supabase (nunca en el navegador ni en este repositorio).
+4. **Vercel** (cuenta del sitio, equipo mikfobe-3309s-projects): proyecto `tablero-wip` desde este repositorio y dominio `tablero.wiptool.com` (registro CNAME en Route 53).
+5. **n8n** (wiptool.app.n8n.cloud): importar `n8n/f12-carga-tablero.json` (se arma con `node n8n/armar-flujo.cjs`), asignar la credencial de Google y una Header Auth `apikey` con la clave secreta de Supabase, y correr una vez el disparador manual para cargar el histórico.
