@@ -1,5 +1,5 @@
-// n8n · F12 · nodos "Filas Google" y "Filas Meta" (Code, una vez por elemento).
-// Convierte la respuesta de Google en filas de la tabla de Supabase y arma la llamada a cargar().
+// n8n · F12 · nodos "Filas Google", "Filas Meta" y "Filas Brevo" (Code, una vez por elemento).
+// Convierte la respuesta de cada API en filas de la tabla de Supabase y arma la llamada a cargar().
 const t = $('__TRABAJOS__').item.json; // el nombre lo pone armar-flujo.cjs
 const r = $json;
 
@@ -55,6 +55,30 @@ if (t.fuente === 'ga4') {
     inversion: Number(x.spend) || 0, impresiones: Math.round(Number(x.impressions) || 0), clics: Math.round(Number(x.clicks) || 0),
     conversaciones: conversaciones(x.actions),
   })), ['fecha', 'campana_id'], ['inversion', 'impresiones', 'clics', 'conversaciones']);
+} else if (t.fuente === 'brevo' && t.tabla === 'brevo_evento_diario') {
+  // Mensajes distintos por día (hora de Bogotá), asunto y evento. Solo se guardan los días del tramo.
+  const ev = r.events || [];
+  if (ev.length >= t.limite) throw new Error(`Brevo devolvió ${ev.length} eventos entre ${t.desde} y ${t.hasta}: hay que partir el tramo`);
+  const dia = new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Bogota' });
+  const m = new Map();
+  for (const e of ev) {
+    const f = dia.format(new Date(e.date));
+    if (f < t.desde || f > t.hasta) continue;
+    const k = [f, String(e.subject || '').trim(), e.event].join('\u0001');
+    if (!m.has(k)) m.set(k, new Set());
+    m.get(k).add(e.messageId || `${e.email}|${e.date}`);
+  }
+  filas = [...m.entries()].map(([k, ids]) => { const [f, asunto, evento] = k.split('\u0001'); return { fecha: f, asunto, evento, mensajes: ids.size }; });
+} else if (t.fuente === 'brevo') {
+  // Campañas masivas enviadas, con sus cifras acumuladas.
+  const dia = new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Bogota' });
+  filas = (r.campaigns || []).filter((c) => c.sentDate).map((c) => {
+    const s = (c.statistics && c.statistics.globalStats) || {};
+    return { fecha: dia.format(new Date(c.sentDate)), campana_id: String(c.id), campana: c.name || '', asunto: c.subject || '',
+      enviados: Math.round(s.sent || 0), entregados: Math.round(s.delivered || 0), aperturas: Math.round(s.uniqueViews || 0),
+      clics: Math.round(s.uniqueClicks || 0), desuscritos: Math.round(s.unsubscriptions || 0),
+      rebotes: Math.round((s.hardBounces || 0) + (s.softBounces || 0)) };
+  });
 } else {
   const campo = t.tabla === 'gsc_pagina_diario' ? 'pagina' : 'consulta';
   filas = agrupar((r.rows || []).map((x) => ({

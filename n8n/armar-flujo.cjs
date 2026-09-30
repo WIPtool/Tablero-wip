@@ -1,5 +1,5 @@
 // Arma los flujos de n8n a partir de los archivos .js de esta carpeta:
-//  - f12-carga-tablero.json: cada hora carga Google (Analytics y Search Console), Meta Ads y la TRM a Supabase.
+//  - f12-carga-tablero.json: cada hora carga Google (Analytics y Search Console), Meta Ads, la TRM, Brevo y Explee a Supabase.
 //  - f14-google-ads.json:    recibe lo que envía el script de Google Ads y lo guarda en Supabase.
 // Uso: node n8n/armar-flujo.cjs
 // Las credenciales se referencian por id (se crean a mano en n8n; las claves nunca van en este repositorio).
@@ -12,7 +12,12 @@ const CRED = {
   google: { googleOAuth2Api: { id: 'T4UYiY0SCMG7Wu4G', name: 'Google account' } },
   supabase: { httpHeaderAuth: { id: 'us3OmK2VUvuuu7t8', name: 'Supabase (tablero)' } },
   meta: { httpHeaderAuth: { id: 'uRqVoTmjjMMQhVze', name: 'Meta Ads (lectura)' } },
+  brevo: { httpHeaderAuth: { id: process.env.CRED_BREVO || 'PENDIENTE', name: 'Brevo (lectura)' } },
+  explee: { httpHeaderAuth: { id: process.env.CRED_EXPLEE || 'PENDIENTE', name: 'Explee' } },
 };
+// Brevo y Explee se conectan cuando existen sus credenciales en n8n (n8n no publica un flujo con credenciales inválidas).
+const BREVO_LISTO = !!process.env.CRED_BREVO;
+const EXPLEE_LISTO = !!process.env.CRED_EXPLEE;
 // Ruta del webhook que llama el script de Google Ads (difícil de adivinar; no da acceso a nada, solo recibe cifras).
 const RUTA_GADS = 'gads-7c1e4b9a2f6d48e3a51c';
 
@@ -33,6 +38,11 @@ const codigo = (id, name, posicion, archivo, porElemento, reemplazos = {}) => {
   return { id, name, type: 'n8n-nodes-base.code', typeVersion: 2, position: posicion,
     parameters: porElemento ? { mode: 'runOnceForEachItem', jsCode: js } : { jsCode: js } };
 };
+// Partes de explee.js, separadas por la marca "// == Nombre del nodo".
+const partes = (archivo) => Object.fromEntries(leer(archivo).split(/^\/\/ == /m).slice(1)
+  .map((b) => { const i = b.indexOf('\n'); return [b.slice(0, i).replace(/\s*\(.*$/, '').trim(), b.slice(i + 1).trim() + '\n']; }));
+const EXPLEE = partes('explee.js');
+const codigoTexto = (id, name, posicion, js) => ({ id, name, type: 'n8n-nodes-base.code', typeVersion: 2, position: posicion, parameters: { jsCode: js } });
 const http = (id, name, posicion, extra) => ({
   id, name, type: 'n8n-nodes-base.httpRequest', typeVersion: 4.2, position: posicion,
   parameters: { method: 'GET', url: '={{ $json.url }}', options: lotes, ...extra.parameters },
@@ -41,6 +51,7 @@ const http = (id, name, posicion, extra) => ({
 const a = (nodo) => ({ main: [[{ node: nodo, type: 'main', index: 0 }]] });
 const varios = (...nodos) => ({ main: [nodos.map((node) => ({ node, type: 'main', index: 0 }))] });
 
+const INICIOS = ['Trabajos Google', 'Trabajos Meta', 'Trabajos TRM', ...(BREVO_LISTO ? ['Trabajos Brevo'] : []), ...(EXPLEE_LISTO ? ['Trabajos Explee'] : [])];
 const f12 = {
   name: 'F12 · Carga del tablero (Google, Meta y TRM → Supabase)',
   nodes: [
@@ -66,14 +77,33 @@ const f12 = {
     http('a1f0c0de-0011-4000-8000-000000000011', 'Consultar TRM', [500, 500], { parameters: {} }),
     codigo('a1f0c0de-0012-4000-8000-000000000012', 'Filas TRM', [740, 500], 'filas-trm.js', false),
 
-    guardar('a1f0c0de-0006-4000-8000-000000000006', [1000, 300]),
+    codigo('a1f0c0de-0013-4000-8000-000000000013', 'Trabajos Brevo', [260, 700], 'trabajos-brevo.js', false),
+    http('a1f0c0de-0014-4000-8000-000000000014', 'Consultar Brevo', [500, 700], {
+      parameters: { authentication: 'genericCredentialType', genericAuthType: 'httpHeaderAuth' },
+      credentials: CRED.brevo }),
+    codigo('a1f0c0de-0015-4000-8000-000000000015', 'Filas Brevo', [740, 700], 'filas.js', true, { __TRABAJOS__: 'Trabajos Brevo' }),
+
+    codigoTexto('a1f0c0de-0016-4000-8000-000000000016', 'Trabajos Explee', [260, 900], EXPLEE['Trabajos Explee']),
+    http('a1f0c0de-0017-4000-8000-000000000017', 'Campañas Explee', [420, 900], {
+      parameters: { authentication: 'genericCredentialType', genericAuthType: 'httpHeaderAuth' },
+      credentials: CRED.explee }),
+    codigoTexto('a1f0c0de-0018-4000-8000-000000000018', 'Pedidos Explee', [580, 900], EXPLEE['Pedidos Explee']),
+    http('a1f0c0de-0019-4000-8000-000000000019', 'Consultar Explee', [740, 900], {
+      parameters: { authentication: 'genericCredentialType', genericAuthType: 'httpHeaderAuth' },
+      credentials: CRED.explee }),
+    codigoTexto('a1f0c0de-0020-4000-8000-000000000020', 'Filas Explee', [900, 900], EXPLEE['Filas Explee']),
+
+    guardar('a1f0c0de-0006-4000-8000-000000000006', [1100, 300]),
   ],
   connections: {
-    'Cada hora': varios('Trabajos Google', 'Trabajos Meta', 'Trabajos TRM'),
-    'Cargar histórico (a mano)': varios('Trabajos Google', 'Trabajos Meta', 'Trabajos TRM'),
+    'Cada hora': varios(...INICIOS),
+    'Cargar histórico (a mano)': varios(...INICIOS),
     'Trabajos Google': a('Consultar Google'), 'Consultar Google': a('Filas Google'), 'Filas Google': a('Guardar en Supabase'),
     'Trabajos Meta': a('Consultar Meta'), 'Consultar Meta': a('Filas Meta'), 'Filas Meta': a('Guardar en Supabase'),
     'Trabajos TRM': a('Consultar TRM'), 'Consultar TRM': a('Filas TRM'), 'Filas TRM': a('Guardar en Supabase'),
+    'Trabajos Brevo': a('Consultar Brevo'), 'Consultar Brevo': a('Filas Brevo'), 'Filas Brevo': a('Guardar en Supabase'),
+    'Trabajos Explee': a('Campañas Explee'), 'Campañas Explee': a('Pedidos Explee'), 'Pedidos Explee': a('Consultar Explee'),
+    'Consultar Explee': a('Filas Explee'), 'Filas Explee': a('Guardar en Supabase'),
   },
   settings: { executionOrder: 'v1', timezone: 'America/Bogota', saveDataSuccessExecution: 'none' },
   pinData: {},
