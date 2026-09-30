@@ -3,8 +3,10 @@
 import { createClient } from '@supabase/supabase-js';
 import { demo } from './demo.js';
 
-const URL = import.meta.env.VITE_SUPABASE_URL;
-const CLAVE = import.meta.env.VITE_SUPABASE_ANON_KEY;
+// Proyecto de Supabase "tablero-wip". La clave publicable es pública por diseño (va en el navegador);
+// quien controla el acceso son las reglas de la base: solo cuentas @wiptool.com leen datos.
+const URL = import.meta.env.VITE_SUPABASE_URL || 'https://tlpnkcroqenudzgiqzum.supabase.co';
+const CLAVE = import.meta.env.VITE_SUPABASE_ANON_KEY || 'sb_publishable_PmKPJyqbHGuyiRP5QKskTg_YfPBxARV';
 const pedirDemo = new URLSearchParams(location.search).has('demo') && ['localhost', '127.0.0.1'].includes(location.hostname);
 
 export const modoEjemplo = !URL || !CLAVE || pedirDemo;

@@ -27,7 +27,7 @@ npm install
 npm run dev
 ```
 
-Sin `.env` arranca en **modo de ejemplo**, con cifras inventadas. Para ver datos reales, copia `.env.example` a `.env` y llena la URL y la clave pública (anon) del proyecto de Supabase.
+Se conecta al proyecto de Supabase `tablero-wip` (la dirección y la clave publicable están en `src/datos.js`). Para ver el **modo de ejemplo**, con cifras inventadas, abre `http://localhost:5174/?demo`.
 
 ## Puesta en marcha (una sola vez)
 
