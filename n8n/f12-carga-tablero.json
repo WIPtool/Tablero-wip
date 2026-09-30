@@ -236,7 +236,7 @@
       },
       "credentials": {
         "httpHeaderAuth": {
-          "id": "PENDIENTE",
+          "id": "eOtWousRPiKJpfVf",
           "name": "Brevo (lectura)"
         }
       }
@@ -293,7 +293,7 @@
       },
       "credentials": {
         "httpHeaderAuth": {
-          "id": "PENDIENTE",
+          "id": "1K5Hj4X9btSUKWco",
           "name": "Explee"
         }
       }
@@ -336,7 +336,7 @@
       },
       "credentials": {
         "httpHeaderAuth": {
-          "id": "PENDIENTE",
+          "id": "1K5Hj4X9btSUKWco",
           "name": "Explee"
         }
       }
@@ -406,6 +406,16 @@
             "node": "Trabajos TRM",
             "type": "main",
             "index": 0
+          },
+          {
+            "node": "Trabajos Brevo",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Trabajos Explee",
+            "type": "main",
+            "index": 0
           }
         ]
       ]
@@ -425,6 +435,16 @@
           },
           {
             "node": "Trabajos TRM",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Trabajos Brevo",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Trabajos Explee",
             "type": "main",
             "index": 0
           }

@@ -12,12 +12,9 @@ const CRED = {
   google: { googleOAuth2Api: { id: 'T4UYiY0SCMG7Wu4G', name: 'Google account' } },
   supabase: { httpHeaderAuth: { id: 'us3OmK2VUvuuu7t8', name: 'Supabase (tablero)' } },
   meta: { httpHeaderAuth: { id: 'uRqVoTmjjMMQhVze', name: 'Meta Ads (lectura)' } },
-  brevo: { httpHeaderAuth: { id: process.env.CRED_BREVO || 'PENDIENTE', name: 'Brevo (lectura)' } },
-  explee: { httpHeaderAuth: { id: process.env.CRED_EXPLEE || 'PENDIENTE', name: 'Explee' } },
+  brevo: { httpHeaderAuth: { id: 'eOtWousRPiKJpfVf', name: 'Brevo (lectura)' } },
+  explee: { httpHeaderAuth: { id: '1K5Hj4X9btSUKWco', name: 'Explee' } },
 };
-// Brevo y Explee se conectan cuando existen sus credenciales en n8n (n8n no publica un flujo con credenciales inválidas).
-const BREVO_LISTO = !!process.env.CRED_BREVO;
-const EXPLEE_LISTO = !!process.env.CRED_EXPLEE;
 // Ruta del webhook que llama el script de Google Ads (difícil de adivinar; no da acceso a nada, solo recibe cifras).
 const RUTA_GADS = 'gads-7c1e4b9a2f6d48e3a51c';
 
@@ -51,7 +48,7 @@ const http = (id, name, posicion, extra) => ({
 const a = (nodo) => ({ main: [[{ node: nodo, type: 'main', index: 0 }]] });
 const varios = (...nodos) => ({ main: [nodos.map((node) => ({ node, type: 'main', index: 0 }))] });
 
-const INICIOS = ['Trabajos Google', 'Trabajos Meta', 'Trabajos TRM', ...(BREVO_LISTO ? ['Trabajos Brevo'] : []), ...(EXPLEE_LISTO ? ['Trabajos Explee'] : [])];
+const INICIOS = ['Trabajos Google', 'Trabajos Meta', 'Trabajos TRM', 'Trabajos Brevo', 'Trabajos Explee'];
 const f12 = {
   name: 'F12 · Carga del tablero (Google, Meta y TRM → Supabase)',
   nodes: [
