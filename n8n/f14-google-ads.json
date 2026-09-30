@@ -60,7 +60,7 @@
       "credentials": {
         "httpHeaderAuth": {
           "id": "us3OmK2VUvuuu7t8",
-          "name": "Header Auth account"
+          "name": "Supabase (tablero)"
         }
       }
     }
