@@ -8,6 +8,7 @@ const diaSemana = new Intl.DateTimeFormat('es-CO', { weekday: 'short', day: 'num
 type Numero = number | null | undefined;
 export const num = (v: Numero) => (v == null || Number.isNaN(v) ? '—' : entero.format(v));
 export const pct = (v: Numero) => (v == null || !Number.isFinite(v) ? '—' : decimal1.format(v * 100) + ' %');
+export const pesos = (v: Numero) => (v == null || Number.isNaN(v) ? '—' : '$ ' + entero.format(v));
 export const pos = (v: Numero) => (v == null || !Number.isFinite(v) ? '—' : decimal1.format(v));
 
 const aFecha = (iso: string) => new Date(iso + 'T00:00:00Z');

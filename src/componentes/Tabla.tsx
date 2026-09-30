@@ -1,17 +1,18 @@
 'use client';
 
 import { useState } from 'react';
-import { num, pct, pos } from '@/lib/formato';
+import { num, pct, pos, pesos } from '@/lib/formato';
 
 // Tipos de columna. Los de enlace se resuelven aquí (no se pueden pasar funciones desde el servidor).
-export type TipoColumna = 'texto' | 'numero' | 'pct' | 'pos' | 'ruta-sitio' | 'url-google';
-export interface Columna { campo: string; etiqueta: string; tipo?: TipoColumna; barra?: boolean }
+export type TipoColumna = 'texto' | 'numero' | 'pesos' | 'pct' | 'pos' | 'ruta-sitio' | 'url-google';
+export interface Columna { campo: string; etiqueta: string; tipo?: TipoColumna; barra?: boolean; sinTotal?: boolean }
 type Fila = Record<string, string | number | null>;
 
-const esNumero = (t?: TipoColumna) => t === 'numero' || t === 'pct' || t === 'pos';
+const esNumero = (t?: TipoColumna) => t === 'numero' || t === 'pesos' || t === 'pct' || t === 'pos';
 
 function Celda({ valor, tipo }: { valor: Fila[string]; tipo?: TipoColumna }) {
   if (tipo === 'numero') return <>{num(valor as number)}</>;
+  if (tipo === 'pesos') return <>{pesos(valor as number)}</>;
   if (tipo === 'pct') return <>{pct(valor as number)}</>;
   if (tipo === 'pos') return <>{pos(valor as number)}</>;
   const texto = String(valor ?? '');
@@ -27,11 +28,11 @@ function Celda({ valor, tipo }: { valor: Fila[string]; tipo?: TipoColumna }) {
   return <>{texto}</>;
 }
 
-export function Tabla({ columnas, filas, limite = 10, total = false, vacio = 'Sin datos en este periodo.' }: {
-  columnas: Columna[]; filas: Fila[]; limite?: number; total?: boolean; vacio?: string;
+export function Tabla({ columnas, filas, limite = 10, total = false, vacio = 'Sin datos en este periodo.', orden: ordenInicial, ascendente = false }: {
+  columnas: Columna[]; filas: Fila[]; limite?: number; total?: boolean; vacio?: string; orden?: string; ascendente?: boolean;
 }) {
-  const [orden, setOrden] = useState(columnas.find((c) => esNumero(c.tipo))?.campo ?? columnas[0].campo);
-  const [asc, setAsc] = useState(false);
+  const [orden, setOrden] = useState(ordenInicial ?? columnas.find((c) => esNumero(c.tipo))?.campo ?? columnas[0].campo);
+  const [asc, setAsc] = useState(ascendente);
   const [todo, setTodo] = useState(false);
 
   const col = columnas.find((c) => c.campo === orden)!;
@@ -93,8 +94,8 @@ export function Tabla({ columnas, filas, limite = 10, total = false, vacio = 'Si
             <tfoot>
               <tr className="border-t border-linea font-semibold">
                 {columnas.map((c, i) => (
-                  <td key={c.campo} className={`px-2 py-[7px] ${c.tipo === 'numero' ? 'text-right tabular-nums' : ''}`}>
-                    {i === 0 ? 'Total' : c.tipo === 'numero' ? num(filas.reduce((a, f) => a + (Number(f[c.campo]) || 0), 0)) : ''}
+                  <td key={c.campo} className={`px-2 py-[7px] ${esNumero(c.tipo) ? 'text-right tabular-nums' : ''}`}>
+                    {i === 0 ? 'Total' : c.sinTotal ? '' : c.tipo === 'numero' ? num(filas.reduce((a, f) => a + (Number(f[c.campo]) || 0), 0)) : c.tipo === 'pesos' ? pesos(filas.reduce((a, f) => a + (Number(f[c.campo]) || 0), 0)) : ''}
                   </td>
                 ))}
               </tr>

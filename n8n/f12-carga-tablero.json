@@ -1,5 +1,5 @@
 {
-  "name": "F12 · Carga del tablero (Analytics y Search Console → Supabase)",
+  "name": "F12 · Carga del tablero (Google, Meta y TRM → Supabase)",
   "nodes": [
     {
       "id": "a1f0c0de-0001-4000-8000-000000000001",
@@ -8,7 +8,7 @@
       "typeVersion": 1.2,
       "position": [
         0,
-        0
+        200
       ],
       "parameters": {
         "rule": {
@@ -29,17 +29,17 @@
       "typeVersion": 1,
       "position": [
         0,
-        200
+        400
       ],
       "parameters": {}
     },
     {
       "id": "a1f0c0de-0003-4000-8000-000000000003",
-      "name": "Trabajos",
+      "name": "Trabajos Google",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        240,
+        260,
         100
       ],
       "parameters": {
@@ -52,17 +52,129 @@
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
       "position": [
-        480,
+        500,
         100
       ],
       "parameters": {
         "method": "POST",
         "url": "={{ $json.url }}",
+        "options": {
+          "batching": {
+            "batch": {
+              "batchSize": 1,
+              "batchInterval": 300
+            }
+          }
+        },
         "authentication": "predefinedCredentialType",
         "nodeCredentialType": "googleOAuth2Api",
         "sendBody": true,
         "specifyBody": "json",
-        "jsonBody": "={{ JSON.stringify($json.body) }}",
+        "jsonBody": "={{ JSON.stringify($json.body) }}"
+      },
+      "credentials": {
+        "googleOAuth2Api": {
+          "id": "T4UYiY0SCMG7Wu4G",
+          "name": "Google account"
+        }
+      }
+    },
+    {
+      "id": "a1f0c0de-0005-4000-8000-000000000005",
+      "name": "Filas Google",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        740,
+        100
+      ],
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "// n8n · F12 · nodos \"Filas Google\" y \"Filas Meta\" (Code, una vez por elemento).\n// Convierte la respuesta de Google en filas de la tabla de Supabase y arma la llamada a cargar().\nconst t = $('Trabajos Google').item.json; // el nombre lo pone armar-flujo.cjs\nconst r = $json;\n\nconst fecha = (s) => (s && s.length === 8 ? `${s.slice(0, 4)}-${s.slice(4, 6)}-${s.slice(6, 8)}` : s);\nconst paises = new Intl.DisplayNames(['es'], { type: 'region' });\nconst pais = (id) => { if (!id || id === '(not set)') return '(sin país)'; try { return paises.of(id) || id; } catch (e) { return id; } };\n\n// Suma las filas que comparten la misma clave (evita claves repetidas al insertar).\nfunction agrupar(filas, claves, sumas) {\n  const m = new Map();\n  for (const f of filas) {\n    const k = claves.map((c) => f[c]).join('\\u0001');\n    const a = m.get(k);\n    if (a) sumas.forEach((s) => { a[s] += f[s]; }); else m.set(k, { ...f });\n  }\n  return [...m.values()];\n}\n\nlet filas = [];\nif (t.fuente === 'ga4') {\n  const dn = (r.dimensionHeaders || []).map((h) => h.name);\n  const mn = (r.metricHeaders || []).map((h) => h.name);\n  const regs = (r.rows || []).map((row) => {\n    const o = {};\n    dn.forEach((n, i) => { o[n] = row.dimensionValues[i].value; });\n    mn.forEach((n, i) => { o[n] = Math.round(Number(row.metricValues[i].value) || 0); });\n    return o;\n  });\n  const v = (x) => (x == null ? '' : String(x));\n  if (t.tabla === 'ga4_canal_diario') {\n    filas = agrupar(regs.map((o) => ({\n      fecha: fecha(o.date), canal: v(o.sessionDefaultChannelGroup), fuente: v(o.sessionSource), medio: v(o.sessionMedium),\n      campana: v(o.sessionCampaignName), contenido: v(o.sessionManualAdContent), termino: v(o.sessionManualTerm),\n      visitas: o.sessions, conversiones: o.keyEvents,\n    })), ['fecha', 'canal', 'fuente', 'medio', 'campana', 'contenido', 'termino'], ['visitas', 'conversiones']);\n  } else if (t.tabla === 'ga4_evento_diario') {\n    filas = agrupar(regs.map((o) => ({\n      fecha: fecha(o.date), evento: v(o.eventName), origen: v(o['customEvent:origen']), correo: v(o['customEvent:correo']),\n      eventos: o.eventCount, conversiones: o.keyEvents, personas: o.totalUsers,\n    })), ['fecha', 'evento', 'origen', 'correo'], ['eventos', 'conversiones', 'personas']);\n  } else if (t.tabla === 'ga4_pagina_diario') {\n    filas = agrupar(regs.map((o) => ({ fecha: fecha(o.date), pagina: v(o.landingPage) || '(sin página)', visitas: o.sessions, conversiones: o.keyEvents })),\n      ['fecha', 'pagina'], ['visitas', 'conversiones']);\n  } else if (t.tabla === 'ga4_audiencia_diario') {\n    filas = agrupar(regs.map((o) => ({ fecha: fecha(o.date), pais: pais(o.countryId), dispositivo: v(o.deviceCategory), visitas: o.sessions, conversiones: o.keyEvents })),\n      ['fecha', 'pais', 'dispositivo'], ['visitas', 'conversiones']);\n  }\n} else if (t.fuente === 'meta') {\n  // Una fila por día y campaña (time_increment=1). Las conversaciones son los chats de WhatsApp iniciados.\n  const conversaciones = (acciones) => Math.round(Number(((acciones || []).find((a) => a.action_type === 'onsite_conversion.messaging_conversation_started_7d') || {}).value) || 0);\n  filas = agrupar((r.data || []).map((x) => ({\n    fecha: x.date_start, campana_id: String(x.campaign_id), campana: x.campaign_name || '', moneda: x.account_currency || 'COP',\n    inversion: Number(x.spend) || 0, impresiones: Math.round(Number(x.impressions) || 0), clics: Math.round(Number(x.clicks) || 0),\n    conversaciones: conversaciones(x.actions),\n  })), ['fecha', 'campana_id'], ['inversion', 'impresiones', 'clics', 'conversaciones']);\n} else {\n  const campo = t.tabla === 'gsc_pagina_diario' ? 'pagina' : 'consulta';\n  filas = agrupar((r.rows || []).map((x) => ({\n    fecha: x.keys[0], sitio: t.sitio, [campo]: x.keys[1],\n    clics: Math.round(x.clicks || 0), impresiones: Math.round(x.impressions || 0), pos_x_imp: (x.position || 0) * (x.impressions || 0),\n  })), ['fecha', 'sitio', campo], ['clics', 'impresiones', 'pos_x_imp']);\n}\n\nreturn { json: { p_tabla: t.tabla, p_desde: t.desde, p_hasta: t.hasta, p_filas: filas, p_fuente: t.fuente, p_sitio: t.sitio } };\n"
+      }
+    },
+    {
+      "id": "a1f0c0de-0007-4000-8000-000000000007",
+      "name": "Trabajos Meta",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        260,
+        300
+      ],
+      "parameters": {
+        "jsCode": "// n8n · F12 · nodo \"Trabajos Meta\" (Code, una vez para todos los elementos).\n// Cada hora: Meta Ads de los últimos 3 días (Meta ajusta las cifras durante unas horas).\n// Corrido a mano: histórico desde 2025-01-01, por tramos de 31 días.\nconst CUENTA = 'act_1212455492189816';\nconst INICIO = '2025-01-01';\n\nconst hoy = new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Bogota' }).format(new Date());\nconst manual = !$input.first().json.timestamp;\nconst sumar = (f, n) => { const d = new Date(f + 'T00:00:00Z'); d.setUTCDate(d.getUTCDate() + n); return d.toISOString().slice(0, 10); };\nconst tramos = (desde, hasta, dias) => {\n  const out = [];\n  for (let a = desde; a <= hasta; a = sumar(a, dias)) { const b = sumar(a, dias - 1); out.push([a, b < hasta ? b : hasta]); }\n  return out;\n};\n\nreturn (manual ? tramos(INICIO, hoy, 31) : [[sumar(hoy, -2), hoy]]).map(([desde, hasta]) => {\n  const qs = new URLSearchParams({\n    level: 'campaign',\n    time_increment: '1',\n    time_range: JSON.stringify({ since: desde, until: hasta }),\n    fields: 'campaign_id,campaign_name,spend,impressions,clicks,actions,account_currency',\n    limit: '1000',\n  });\n  return { json: { fuente: 'meta', tabla: 'meta_campana_diario', desde, hasta, sitio: null,\n    url: `https://graph.facebook.com/v23.0/${CUENTA}/insights?${qs}` } };\n});\n"
+      }
+    },
+    {
+      "id": "a1f0c0de-0008-4000-8000-000000000008",
+      "name": "Consultar Meta",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        500,
+        300
+      ],
+      "parameters": {
+        "method": "GET",
+        "url": "={{ $json.url }}",
+        "options": {
+          "batching": {
+            "batch": {
+              "batchSize": 1,
+              "batchInterval": 300
+            }
+          }
+        },
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth"
+      },
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "PENDIENTE",
+          "name": "Meta Ads (lectura)"
+        }
+      }
+    },
+    {
+      "id": "a1f0c0de-0009-4000-8000-000000000009",
+      "name": "Filas Meta",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        740,
+        300
+      ],
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "// n8n · F12 · nodos \"Filas Google\" y \"Filas Meta\" (Code, una vez por elemento).\n// Convierte la respuesta de Google en filas de la tabla de Supabase y arma la llamada a cargar().\nconst t = $('Trabajos Meta').item.json; // el nombre lo pone armar-flujo.cjs\nconst r = $json;\n\nconst fecha = (s) => (s && s.length === 8 ? `${s.slice(0, 4)}-${s.slice(4, 6)}-${s.slice(6, 8)}` : s);\nconst paises = new Intl.DisplayNames(['es'], { type: 'region' });\nconst pais = (id) => { if (!id || id === '(not set)') return '(sin país)'; try { return paises.of(id) || id; } catch (e) { return id; } };\n\n// Suma las filas que comparten la misma clave (evita claves repetidas al insertar).\nfunction agrupar(filas, claves, sumas) {\n  const m = new Map();\n  for (const f of filas) {\n    const k = claves.map((c) => f[c]).join('\\u0001');\n    const a = m.get(k);\n    if (a) sumas.forEach((s) => { a[s] += f[s]; }); else m.set(k, { ...f });\n  }\n  return [...m.values()];\n}\n\nlet filas = [];\nif (t.fuente === 'ga4') {\n  const dn = (r.dimensionHeaders || []).map((h) => h.name);\n  const mn = (r.metricHeaders || []).map((h) => h.name);\n  const regs = (r.rows || []).map((row) => {\n    const o = {};\n    dn.forEach((n, i) => { o[n] = row.dimensionValues[i].value; });\n    mn.forEach((n, i) => { o[n] = Math.round(Number(row.metricValues[i].value) || 0); });\n    return o;\n  });\n  const v = (x) => (x == null ? '' : String(x));\n  if (t.tabla === 'ga4_canal_diario') {\n    filas = agrupar(regs.map((o) => ({\n      fecha: fecha(o.date), canal: v(o.sessionDefaultChannelGroup), fuente: v(o.sessionSource), medio: v(o.sessionMedium),\n      campana: v(o.sessionCampaignName), contenido: v(o.sessionManualAdContent), termino: v(o.sessionManualTerm),\n      visitas: o.sessions, conversiones: o.keyEvents,\n    })), ['fecha', 'canal', 'fuente', 'medio', 'campana', 'contenido', 'termino'], ['visitas', 'conversiones']);\n  } else if (t.tabla === 'ga4_evento_diario') {\n    filas = agrupar(regs.map((o) => ({\n      fecha: fecha(o.date), evento: v(o.eventName), origen: v(o['customEvent:origen']), correo: v(o['customEvent:correo']),\n      eventos: o.eventCount, conversiones: o.keyEvents, personas: o.totalUsers,\n    })), ['fecha', 'evento', 'origen', 'correo'], ['eventos', 'conversiones', 'personas']);\n  } else if (t.tabla === 'ga4_pagina_diario') {\n    filas = agrupar(regs.map((o) => ({ fecha: fecha(o.date), pagina: v(o.landingPage) || '(sin página)', visitas: o.sessions, conversiones: o.keyEvents })),\n      ['fecha', 'pagina'], ['visitas', 'conversiones']);\n  } else if (t.tabla === 'ga4_audiencia_diario') {\n    filas = agrupar(regs.map((o) => ({ fecha: fecha(o.date), pais: pais(o.countryId), dispositivo: v(o.deviceCategory), visitas: o.sessions, conversiones: o.keyEvents })),\n      ['fecha', 'pais', 'dispositivo'], ['visitas', 'conversiones']);\n  }\n} else if (t.fuente === 'meta') {\n  // Una fila por día y campaña (time_increment=1). Las conversaciones son los chats de WhatsApp iniciados.\n  const conversaciones = (acciones) => Math.round(Number(((acciones || []).find((a) => a.action_type === 'onsite_conversion.messaging_conversation_started_7d') || {}).value) || 0);\n  filas = agrupar((r.data || []).map((x) => ({\n    fecha: x.date_start, campana_id: String(x.campaign_id), campana: x.campaign_name || '', moneda: x.account_currency || 'COP',\n    inversion: Number(x.spend) || 0, impresiones: Math.round(Number(x.impressions) || 0), clics: Math.round(Number(x.clicks) || 0),\n    conversaciones: conversaciones(x.actions),\n  })), ['fecha', 'campana_id'], ['inversion', 'impresiones', 'clics', 'conversaciones']);\n} else {\n  const campo = t.tabla === 'gsc_pagina_diario' ? 'pagina' : 'consulta';\n  filas = agrupar((r.rows || []).map((x) => ({\n    fecha: x.keys[0], sitio: t.sitio, [campo]: x.keys[1],\n    clics: Math.round(x.clicks || 0), impresiones: Math.round(x.impressions || 0), pos_x_imp: (x.position || 0) * (x.impressions || 0),\n  })), ['fecha', 'sitio', campo], ['clics', 'impresiones', 'pos_x_imp']);\n}\n\nreturn { json: { p_tabla: t.tabla, p_desde: t.desde, p_hasta: t.hasta, p_filas: filas, p_fuente: t.fuente, p_sitio: t.sitio } };\n"
+      }
+    },
+    {
+      "id": "a1f0c0de-0010-4000-8000-000000000010",
+      "name": "Trabajos TRM",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        260,
+        500
+      ],
+      "parameters": {
+        "jsCode": "// n8n · F12 · nodo \"Trabajos TRM\" (Code, una vez para todos los elementos).\n// TRM oficial de datos.gov.co (no pide clave). A las 7 a. m. carga los últimos 10 días; a mano, desde 2024.\nconst hoy = new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Bogota' }).format(new Date());\nconst hora = Number(new Intl.DateTimeFormat('en-US', { timeZone: 'America/Bogota', hour: 'numeric', hourCycle: 'h23' }).format(new Date()));\nconst manual = !$input.first().json.timestamp;\nif (!manual && hora !== 7) return [];\n\nconst sumar = (f, n) => { const d = new Date(f + 'T00:00:00Z'); d.setUTCDate(d.getUTCDate() + n); return d.toISOString().slice(0, 10); };\nconst desde = manual ? '2024-01-01' : sumar(hoy, -10);\nconst donde = encodeURIComponent(`vigenciahasta >= '${desde}T00:00:00'`);\nreturn [{ json: { fuente: 'trm', tabla: 'trm_diaria', desde, hasta: hoy, sitio: null,\n  url: `https://www.datos.gov.co/resource/32sa-8pi3.json?$order=vigenciadesde&$limit=5000&$where=${donde}` } }];\n"
+      }
+    },
+    {
+      "id": "a1f0c0de-0011-4000-8000-000000000011",
+      "name": "Consultar TRM",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        500,
+        500
+      ],
+      "parameters": {
+        "method": "GET",
+        "url": "={{ $json.url }}",
         "options": {
           "batching": {
             "batch": {
@@ -74,17 +186,16 @@
       }
     },
     {
-      "id": "a1f0c0de-0005-4000-8000-000000000005",
-      "name": "Filas",
+      "id": "a1f0c0de-0012-4000-8000-000000000012",
+      "name": "Filas TRM",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        720,
-        100
+        740,
+        500
       ],
       "parameters": {
-        "mode": "runOnceForEachItem",
-        "jsCode": "// n8n · F12 · nodo \"Filas\" (Code, una vez por elemento).\n// Convierte la respuesta de Google en filas de la tabla de Supabase y arma la llamada a cargar().\nconst t = $('Trabajos').item.json;\nconst r = $json;\n\nconst fecha = (s) => (s && s.length === 8 ? `${s.slice(0, 4)}-${s.slice(4, 6)}-${s.slice(6, 8)}` : s);\nconst paises = new Intl.DisplayNames(['es'], { type: 'region' });\nconst pais = (id) => { if (!id || id === '(not set)') return '(sin país)'; try { return paises.of(id) || id; } catch (e) { return id; } };\n\n// Suma las filas que comparten la misma clave (evita claves repetidas al insertar).\nfunction agrupar(filas, claves, sumas) {\n  const m = new Map();\n  for (const f of filas) {\n    const k = claves.map((c) => f[c]).join('\\u0001');\n    const a = m.get(k);\n    if (a) sumas.forEach((s) => { a[s] += f[s]; }); else m.set(k, { ...f });\n  }\n  return [...m.values()];\n}\n\nlet filas = [];\nif (t.fuente === 'ga4') {\n  const dn = (r.dimensionHeaders || []).map((h) => h.name);\n  const mn = (r.metricHeaders || []).map((h) => h.name);\n  const regs = (r.rows || []).map((row) => {\n    const o = {};\n    dn.forEach((n, i) => { o[n] = row.dimensionValues[i].value; });\n    mn.forEach((n, i) => { o[n] = Math.round(Number(row.metricValues[i].value) || 0); });\n    return o;\n  });\n  const v = (x) => (x == null ? '' : String(x));\n  if (t.tabla === 'ga4_canal_diario') {\n    filas = agrupar(regs.map((o) => ({\n      fecha: fecha(o.date), canal: v(o.sessionDefaultChannelGroup), fuente: v(o.sessionSource), medio: v(o.sessionMedium),\n      campana: v(o.sessionCampaignName), contenido: v(o.sessionManualAdContent), termino: v(o.sessionManualTerm),\n      visitas: o.sessions, conversiones: o.keyEvents,\n    })), ['fecha', 'canal', 'fuente', 'medio', 'campana', 'contenido', 'termino'], ['visitas', 'conversiones']);\n  } else if (t.tabla === 'ga4_evento_diario') {\n    filas = agrupar(regs.map((o) => ({\n      fecha: fecha(o.date), evento: v(o.eventName), origen: v(o['customEvent:origen']), correo: v(o['customEvent:correo']),\n      eventos: o.eventCount, conversiones: o.keyEvents, personas: o.totalUsers,\n    })), ['fecha', 'evento', 'origen', 'correo'], ['eventos', 'conversiones', 'personas']);\n  } else if (t.tabla === 'ga4_pagina_diario') {\n    filas = agrupar(regs.map((o) => ({ fecha: fecha(o.date), pagina: v(o.landingPage) || '(sin página)', visitas: o.sessions, conversiones: o.keyEvents })),\n      ['fecha', 'pagina'], ['visitas', 'conversiones']);\n  } else if (t.tabla === 'ga4_audiencia_diario') {\n    filas = agrupar(regs.map((o) => ({ fecha: fecha(o.date), pais: pais(o.countryId), dispositivo: v(o.deviceCategory), visitas: o.sessions, conversiones: o.keyEvents })),\n      ['fecha', 'pais', 'dispositivo'], ['visitas', 'conversiones']);\n  }\n} else {\n  const campo = t.tabla === 'gsc_pagina_diario' ? 'pagina' : 'consulta';\n  filas = agrupar((r.rows || []).map((x) => ({\n    fecha: x.keys[0], sitio: t.sitio, [campo]: x.keys[1],\n    clics: Math.round(x.clicks || 0), impresiones: Math.round(x.impressions || 0), pos_x_imp: (x.position || 0) * (x.impressions || 0),\n  })), ['fecha', 'sitio', campo], ['clics', 'impresiones', 'pos_x_imp']);\n}\n\nreturn { json: { p_tabla: t.tabla, p_desde: t.desde, p_hasta: t.hasta, p_filas: filas, p_fuente: t.fuente, p_sitio: t.sitio } };\n"
+        "jsCode": "// n8n · F12 · nodo \"Filas TRM\" (Code, una vez para todos los elementos).\n// datos.gov.co devuelve tramos de vigencia (un fin de semana es un solo tramo); aquí se abren en un valor por día.\nconst t = $('Trabajos TRM').first().json;\nconst sumar = (f, n) => { const d = new Date(f + 'T00:00:00Z'); d.setUTCDate(d.getUTCDate() + n); return d.toISOString().slice(0, 10); };\n\nconst porDia = new Map();\nfor (const { json: x } of $input.all()) {\n  if (!x || !x.vigenciadesde) continue;\n  const valor = Number(x.valor);\n  for (let d = x.vigenciadesde.slice(0, 10); d <= x.vigenciahasta.slice(0, 10); d = sumar(d, 1)) {\n    if (d >= t.desde && d <= t.hasta) porDia.set(d, valor);\n  }\n}\nconst filas = [...porDia].map(([fecha, valor]) => ({ fecha, valor }));\nconst fechas = filas.map((f) => f.fecha).sort();\nif (!filas.length) return [];\nreturn [{ json: { p_tabla: 'trm_diaria', p_desde: fechas[0], p_hasta: fechas[fechas.length - 1], p_filas: filas, p_fuente: 'trm', p_sitio: null } }];\n"
       }
     },
     {
@@ -93,8 +204,8 @@
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
       "position": [
-        960,
-        100
+        1000,
+        300
       ],
       "parameters": {
         "method": "POST",
@@ -112,6 +223,12 @@
             }
           }
         }
+      },
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "us3OmK2VUvuuu7t8",
+          "name": "Header Auth account"
+        }
       }
     }
   ],
@@ -120,7 +237,12 @@
       "main": [
         [
           {
-            "node": "Trabajos",
+            "node": "Trabajos Google",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Trabajos TRM",
             "type": "main",
             "index": 0
           }
@@ -131,14 +253,19 @@
       "main": [
         [
           {
-            "node": "Trabajos",
+            "node": "Trabajos Google",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Trabajos TRM",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "Trabajos": {
+    "Trabajos Google": {
       "main": [
         [
           {
@@ -153,14 +280,80 @@
       "main": [
         [
           {
-            "node": "Filas",
+            "node": "Filas Google",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "Filas": {
+    "Filas Google": {
+      "main": [
+        [
+          {
+            "node": "Guardar en Supabase",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Trabajos Meta": {
+      "main": [
+        [
+          {
+            "node": "Consultar Meta",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Consultar Meta": {
+      "main": [
+        [
+          {
+            "node": "Filas Meta",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Filas Meta": {
+      "main": [
+        [
+          {
+            "node": "Guardar en Supabase",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Trabajos TRM": {
+      "main": [
+        [
+          {
+            "node": "Consultar TRM",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Consultar TRM": {
+      "main": [
+        [
+          {
+            "node": "Filas TRM",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Filas TRM": {
       "main": [
         [
           {

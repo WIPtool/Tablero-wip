@@ -2,7 +2,8 @@ import type { Metadata } from 'next';
 import { Encabezado, Cifras, Rejilla, Tarjeta, Leyenda } from '@/componentes/Bloques';
 import { GraficaPaneles } from '@/componentes/GraficaPaneles';
 import { Tabla } from '@/componentes/Tabla';
-import { pedir, type Resumen } from '@/lib/datos';
+import { pedir, type Resumen, type Inversion } from '@/lib/datos';
+import { pesos } from '@/lib/formato';
 import { leerRango, type ParametrosBusqueda } from '@/lib/rango';
 import { buscarPagina } from '@/lib/paginas';
 
@@ -16,7 +17,8 @@ const EVENTOS: Record<string, string> = {
 
 export default async function PaginaResumen({ searchParams }: { searchParams: Promise<ParametrosBusqueda> }) {
   const rango = leerRango(await searchParams);
-  const d = await pedir<Resumen>('tablero_resumen', { p_desde: rango.desde, p_hasta: rango.hasta });
+  const params = { p_desde: rango.desde, p_hasta: rango.hasta };
+  const [d, inv] = await Promise.all([pedir<Resumen>('tablero_resumen', params), pedir<Inversion>('tablero_inversion', params)]);
   const k = d.kpis;
 
   return (
@@ -27,7 +29,7 @@ export default async function PaginaResumen({ searchParams }: { searchParams: Pr
         { etiqueta: 'Visitas al sitio', valor: k.visitas, anterior: k.visitas_ant },
         { etiqueta: 'Clics desde Google', valor: k.clics_google, anterior: k.clics_google_ant },
         { etiqueta: 'Apariciones en Google', valor: k.impresiones, anterior: k.impresiones_ant },
-        { etiqueta: 'Total inversión (COP)', pendiente: 'Llega en T2', nota: 'Meta, Google Ads y herramientas, en pesos' },
+        { etiqueta: 'Total inversión (COP)', valor: inv.total, anterior: inv.total_ant, formato: pesos },
       ]} />
       <Rejilla>
         <Tarjeta titulo="Visitas y conversiones por día">

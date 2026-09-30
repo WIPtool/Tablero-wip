@@ -1,0 +1,97 @@
+{
+  "name": "F14 · Google Ads → Supabase (lo llama el script de Google Ads)",
+  "nodes": [
+    {
+      "id": "b2e0c0de-0001-4000-8000-000000000001",
+      "name": "Recibir de Google Ads",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        0,
+        0
+      ],
+      "webhookId": "b2e0c0de-0001-4000-8000-00000000c0de",
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "gads-7c1e4b9a2f6d48e3a51c",
+        "responseMode": "onReceived",
+        "options": {}
+      }
+    },
+    {
+      "id": "b2e0c0de-0002-4000-8000-000000000002",
+      "name": "Filas Google Ads",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        240,
+        0
+      ],
+      "parameters": {
+        "jsCode": "// n8n · F14 · nodo \"Filas Google Ads\" (Code, una vez para todos los elementos).\n// Revisa lo que envía el script de Google Ads y arma la llamada a cargar() de Supabase.\nconst b = $input.first().json.body || {};\nconst esFecha = (v) => typeof v === 'string' && /^\\d{4}-\\d{2}-\\d{2}$/.test(v);\nif (!esFecha(b.desde) || !esFecha(b.hasta) || !Array.isArray(b.filas)) throw new Error('Envío de Google Ads con formato inesperado');\n\nconst moneda = String(b.moneda || 'COP').toUpperCase().slice(0, 3);\nconst m = new Map();\nfor (const f of b.filas) {\n  if (!esFecha(f.fecha) || f.fecha < b.desde || f.fecha > b.hasta) continue;\n  const clave = f.fecha + '|' + f.campana_id;\n  const a = m.get(clave) || { fecha: f.fecha, campana_id: String(f.campana_id), campana: String(f.campana || '').slice(0, 200), moneda,\n    inversion: 0, impresiones: 0, clics: 0, conversiones: 0 };\n  a.inversion += Number(f.inversion) || 0;\n  a.impresiones += Math.round(Number(f.impresiones) || 0);\n  a.clics += Math.round(Number(f.clics) || 0);\n  a.conversiones += Number(f.conversiones) || 0;\n  m.set(clave, a);\n}\nreturn [{ json: { p_tabla: 'gads_campana_diario', p_desde: b.desde, p_hasta: b.hasta, p_filas: [...m.values()], p_fuente: 'gads', p_sitio: null } }];\n"
+      }
+    },
+    {
+      "id": "b2e0c0de-0003-4000-8000-000000000003",
+      "name": "Guardar en Supabase",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        480,
+        0
+      ],
+      "parameters": {
+        "method": "POST",
+        "url": "https://tlpnkcroqenudzgiqzum.supabase.co/rest/v1/rpc/cargar",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify($json) }}",
+        "options": {
+          "batching": {
+            "batch": {
+              "batchSize": 1,
+              "batchInterval": 100
+            }
+          }
+        }
+      },
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "us3OmK2VUvuuu7t8",
+          "name": "Header Auth account"
+        }
+      }
+    }
+  ],
+  "connections": {
+    "Recibir de Google Ads": {
+      "main": [
+        [
+          {
+            "node": "Filas Google Ads",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Filas Google Ads": {
+      "main": [
+        [
+          {
+            "node": "Guardar en Supabase",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "timezone": "America/Bogota"
+  },
+  "pinData": {}
+}

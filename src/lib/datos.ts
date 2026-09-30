@@ -37,3 +37,17 @@ export async function pedir<T>(funcion: string, params: Record<string, unknown> 
   if (error) throw new Error(error.message);
   return data as T;
 }
+
+export interface Pauta {
+  kpis: Kpis;
+  serie: { fecha: string; inversion: number; conversaciones: number }[];
+  por_plataforma: { plataforma: string; inversion: number }[];
+  por_mes: { mes: string; plataforma: string; inversion: number }[];
+  campanas_meta: { campana: string; inversion: number; clics: number; conversaciones: number; costo: number | null }[];
+  campanas_gads: { campana: string; inversion: number; clics: number; conversiones: number; costo: number | null }[];
+}
+export interface Inversion { total: number; total_ant: number }
+export interface CostoFijo {
+  id: number; plataforma: string; monto: number; moneda: 'COP' | 'USD'; desde: string; hasta: string | null; nota: string;
+  actualizado_por: string; actualizado: string;
+}

@@ -168,3 +168,30 @@ function estado() {
 }
 
 export const demo = { tablero_resumen: resumen, tablero_sitio: sitio, tablero_seo: seo, tablero_estado: estado };
+
+// T2: pauta e inversión (ejemplo).
+function pauta({ p_desde, p_hasta }) {
+  const f = dias(p_desde, p_hasta);
+  const r = azar('pauta' + p_desde + p_hasta);
+  const serie = f.map((fecha) => { const x = azar('m' + fecha)(); return { fecha, inversion: Math.round(38000 + x * 16000), conversaciones: Math.round(4 + x * 5) }; });
+  const meta = serie.reduce((a, x) => a + x.inversion, 0);
+  const conversaciones = serie.reduce((a, x) => a + x.conversaciones, 0);
+  const brevo = Math.round(17 * 4100 / 30 * f.length);
+  const mes = p_hasta.slice(0, 7);
+  return {
+    kpis: { total: meta + brevo, total_ant: Math.round((meta + brevo) * (0.9 + r() * 0.2)), meta, meta_ant: Math.round(meta * 0.95),
+      conversaciones, conversaciones_ant: Math.round(conversaciones * 0.9), meta_clics: Math.round(conversaciones * 8.5), meta_clics_ant: 0,
+      meta_impresiones: conversaciones * 580, gads: 0, gads_ant: 0, gads_clics: 0, gads_conversiones: 0 },
+    serie: serie.map((x) => ({ ...x, inversion: x.inversion + Math.round(17 * 4100 / 30) })),
+    por_plataforma: [{ plataforma: 'Meta', inversion: meta }, { plataforma: 'Brevo', inversion: brevo }],
+    por_mes: [{ mes, plataforma: 'Meta', inversion: meta }, { mes, plataforma: 'Brevo', inversion: brevo }],
+    campanas_meta: [
+      { campana: 'AdxMediaLab.com: Mensajería 2', inversion: Math.round(meta * 0.92), clics: Math.round(conversaciones * 7.8), conversaciones: Math.round(conversaciones * 0.92), costo: 7030 },
+      { campana: 'AdxMediaLab.com: Mensajería 3', inversion: Math.round(meta * 0.08), clics: Math.round(conversaciones * 0.7), conversaciones: Math.round(conversaciones * 0.08), costo: 6770 },
+    ],
+    campanas_gads: [],
+  };
+}
+function inversion(p) { const k = pauta(p).kpis; return { total: k.total, total_ant: k.total_ant }; }
+demo.tablero_pauta = pauta;
+demo.tablero_inversion = inversion;

@@ -6,6 +6,8 @@ export const PAGINAS: Pagina[] = [
   { id: 'sitio', titulo: 'Sitio web', sub: 'Qué hace la gente en wiptool.com' },
   { id: 'seo', titulo: 'SEO sitio web', sub: 'Cómo nos encuentran en Google: wiptool.com' },
   { id: 'seo-plataforma', titulo: 'SEO plataforma', sub: 'Cómo nos encuentran en Google: platform.wiptool.com' },
+  { id: 'pauta', titulo: 'Pauta', sub: 'Meta Ads, Google Ads e inversión total en pesos' },
+  { id: 'costos', titulo: 'Costos fijos', sub: 'Suscripciones que suman a la inversión (Brevo y demás)' },
 ];
 
 export const PROXIMAS: Pagina[] = [
@@ -13,10 +15,6 @@ export const PROXIMAS: Pagina[] = [
     'Oportunidades por etapa: nuevo, calificado, reunión agendada, reunión hecha, cliente',
     'Costo por reunión y por cliente según el origen',
     'Tiempo promedio entre etapas'] },
-  { id: 'pauta', titulo: 'Pauta', etapa: 'T2', sub: 'Google Ads y Meta Ads conectados directo, sin Windsor', puntos: [
-    'Inversión, clics, conversaciones de WhatsApp y costo por conversación por campaña',
-    'Total de inversión en pesos, con las herramientas (Brevo, Explee)',
-    'Inversión por plataforma y mes'] },
   { id: 'email', titulo: 'Email marketing', etapa: 'T3', sub: 'Brevo conectado directo por su API', puntos: [
     'Enviados, aperturas y clics por automatización y por correo',
     'Clics desde los correos a WhatsApp y a la agenda',

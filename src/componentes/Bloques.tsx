@@ -53,7 +53,7 @@ export function Cifras({ items }: { items: Cifra[] }) {
         return (
           <div key={c.etiqueta} className={`${base} ${c.principal ? 'border-navy bg-navy text-white dark:border-linea dark:bg-superficie-2 dark:text-tinta' : 'border-linea bg-superficie'}`}>
             <span className={`text-[13px] ${c.principal ? 'text-white/70 dark:text-suave' : 'text-suave'}`}>{c.etiqueta}</span>
-            <span className={`font-display text-[27px] font-black leading-[1.1] tracking-[-0.02em] tabular-nums md:text-[32px] ${c.principal ? 'text-lima' : ''}`}>
+            <span className={`font-display whitespace-nowrap text-[clamp(22px,2.3vw,32px)] font-black leading-[1.1] tracking-[-0.02em] tabular-nums ${c.principal ? 'text-lima' : ''}`}>
               {f(c.valor)}
             </span>
             {d && (

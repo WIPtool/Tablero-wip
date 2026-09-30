@@ -1,6 +1,6 @@
-// n8n · F12 · nodo "Filas" (Code, una vez por elemento).
+// n8n · F12 · nodos "Filas Google" y "Filas Meta" (Code, una vez por elemento).
 // Convierte la respuesta de Google en filas de la tabla de Supabase y arma la llamada a cargar().
-const t = $('Trabajos').item.json;
+const t = $('__TRABAJOS__').item.json; // el nombre lo pone armar-flujo.cjs
 const r = $json;
 
 const fecha = (s) => (s && s.length === 8 ? `${s.slice(0, 4)}-${s.slice(4, 6)}-${s.slice(6, 8)}` : s);
@@ -47,6 +47,14 @@ if (t.fuente === 'ga4') {
     filas = agrupar(regs.map((o) => ({ fecha: fecha(o.date), pais: pais(o.countryId), dispositivo: v(o.deviceCategory), visitas: o.sessions, conversiones: o.keyEvents })),
       ['fecha', 'pais', 'dispositivo'], ['visitas', 'conversiones']);
   }
+} else if (t.fuente === 'meta') {
+  // Una fila por día y campaña (time_increment=1). Las conversaciones son los chats de WhatsApp iniciados.
+  const conversaciones = (acciones) => Math.round(Number(((acciones || []).find((a) => a.action_type === 'onsite_conversion.messaging_conversation_started_7d') || {}).value) || 0);
+  filas = agrupar((r.data || []).map((x) => ({
+    fecha: x.date_start, campana_id: String(x.campaign_id), campana: x.campaign_name || '', moneda: x.account_currency || 'COP',
+    inversion: Number(x.spend) || 0, impresiones: Math.round(Number(x.impressions) || 0), clics: Math.round(Number(x.clicks) || 0),
+    conversaciones: conversaciones(x.actions),
+  })), ['fecha', 'campana_id'], ['inversion', 'impresiones', 'clics', 'conversaciones']);
 } else {
   const campo = t.tabla === 'gsc_pagina_diario' ? 'pagina' : 'consulta';
   filas = agrupar((r.rows || []).map((x) => ({
