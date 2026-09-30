@@ -222,7 +222,7 @@ begin
     raise exception 'Tabla no permitida: %', p_tabla;
   end if;
   if p_tabla = 'explee_lead' then
-    delete from explee_lead; -- la lista completa se reemplaza en cada carga
+    delete from explee_lead where true; -- la lista completa se reemplaza en cada carga (Supabase exige un WHERE)
   elsif p_sitio is null then
     execute format('delete from %I where fecha between $1 and $2', p_tabla) using p_desde, p_hasta;
   else
