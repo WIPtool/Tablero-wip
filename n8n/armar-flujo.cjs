@@ -10,10 +10,9 @@ const leer = (f) => fs.readFileSync(path.join(__dirname, f), 'utf8').replace(/\r
 const SUPABASE = 'https://tlpnkcroqenudzgiqzum.supabase.co';
 const CRED = {
   google: { googleOAuth2Api: { id: 'T4UYiY0SCMG7Wu4G', name: 'Google account' } },
-  supabase: { httpHeaderAuth: { id: 'us3OmK2VUvuuu7t8', name: 'Header Auth account' } },
-  meta: { httpHeaderAuth: { id: process.env.CRED_META || 'PENDIENTE', name: 'Meta Ads (lectura)' } },
+  supabase: { httpHeaderAuth: { id: 'us3OmK2VUvuuu7t8', name: 'Supabase (tablero)' } },
+  meta: { httpHeaderAuth: { id: 'uRqVoTmjjMMQhVze', name: 'Meta Ads (lectura)' } },
 };
-const META_LISTO = !!process.env.CRED_META;
 // Ruta del webhook que llama el script de Google Ads (difícil de adivinar; no da acceso a nada, solo recibe cifras).
 const RUTA_GADS = 'gads-7c1e4b9a2f6d48e3a51c';
 
@@ -70,9 +69,8 @@ const f12 = {
     guardar('a1f0c0de-0006-4000-8000-000000000006', [1000, 300]),
   ],
   connections: {
-    // Meta se conecta solo cuando ya existe su credencial en n8n (CRED_META=<id> node n8n/armar-flujo.cjs).
-    'Cada hora': varios('Trabajos Google', ...(META_LISTO ? ['Trabajos Meta'] : []), 'Trabajos TRM'),
-    'Cargar histórico (a mano)': varios('Trabajos Google', ...(META_LISTO ? ['Trabajos Meta'] : []), 'Trabajos TRM'),
+    'Cada hora': varios('Trabajos Google', 'Trabajos Meta', 'Trabajos TRM'),
+    'Cargar histórico (a mano)': varios('Trabajos Google', 'Trabajos Meta', 'Trabajos TRM'),
     'Trabajos Google': a('Consultar Google'), 'Consultar Google': a('Filas Google'), 'Filas Google': a('Guardar en Supabase'),
     'Trabajos Meta': a('Consultar Meta'), 'Consultar Meta': a('Filas Meta'), 'Filas Meta': a('Guardar en Supabase'),
     'Trabajos TRM': a('Consultar TRM'), 'Consultar TRM': a('Filas TRM'), 'Filas TRM': a('Guardar en Supabase'),

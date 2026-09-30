@@ -131,7 +131,7 @@
       },
       "credentials": {
         "httpHeaderAuth": {
-          "id": "PENDIENTE",
+          "id": "uRqVoTmjjMMQhVze",
           "name": "Meta Ads (lectura)"
         }
       }
@@ -227,7 +227,7 @@
       "credentials": {
         "httpHeaderAuth": {
           "id": "us3OmK2VUvuuu7t8",
-          "name": "Header Auth account"
+          "name": "Supabase (tablero)"
         }
       }
     }
@@ -238,6 +238,11 @@
         [
           {
             "node": "Trabajos Google",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Trabajos Meta",
             "type": "main",
             "index": 0
           },
@@ -254,6 +259,11 @@
         [
           {
             "node": "Trabajos Google",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Trabajos Meta",
             "type": "main",
             "index": 0
           },
