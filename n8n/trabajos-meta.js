@@ -14,13 +14,14 @@ const tramos = (desde, hasta, dias) => {
 };
 
 return (manual ? tramos(INICIO, hoy, 31) : [[sumar(hoy, -2), hoy]]).map(([desde, hasta]) => {
-  const qs = new URLSearchParams({
+  // El Code de n8n no tiene URLSearchParams: se arma a mano.
+  const qs = Object.entries({
     level: 'campaign',
     time_increment: '1',
     time_range: JSON.stringify({ since: desde, until: hasta }),
     fields: 'campaign_id,campaign_name,spend,impressions,clicks,actions,account_currency',
     limit: '1000',
-  });
+  }).map(([k, v]) => `${k}=${encodeURIComponent(v)}`).join('&');
   return { json: { fuente: 'meta', tabla: 'meta_campana_diario', desde, hasta, sitio: null,
     url: `https://graph.facebook.com/v23.0/${CUENTA}/insights?${qs}` } };
 });
