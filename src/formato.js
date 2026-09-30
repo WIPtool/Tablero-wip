@@ -25,6 +25,8 @@ export function cambio(actual, anterior, { menorEsMejor = false } = {}) {
   if (anterior === 0) return actual === 0 ? { texto: 'sin cambio', clase: '' } : { texto: 'nuevo', clase: menorEsMejor ? '' : 'sube' };
   const d = (actual - anterior) / Math.abs(anterior);
   if (Math.abs(d) < 0.005) return { texto: 'sin cambio', clase: '' };
+  // Más de 10 veces: el periodo anterior casi no tiene datos (p. ej., antes de que empezara la medición).
+  if (d > 10) return { texto: 'el periodo anterior casi no tiene datos', clase: '' };
   const mejora = menorEsMejor ? d < 0 : d > 0;
   return { texto: (d > 0 ? '▲ ' : '▼ ') + decimal1.format(Math.abs(d) * 100) + ' %', clase: mejora ? 'sube' : 'baja' };
 }

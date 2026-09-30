@@ -1,0 +1,181 @@
+{
+  "name": "F12 · Carga del tablero (Analytics y Search Console → Supabase)",
+  "nodes": [
+    {
+      "id": "a1f0c0de-0001-4000-8000-000000000001",
+      "name": "Cada hora",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [
+        0,
+        0
+      ],
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "hours",
+              "hoursInterval": 1,
+              "triggerAtMinute": 10
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "a1f0c0de-0002-4000-8000-000000000002",
+      "name": "Cargar histórico (a mano)",
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [
+        0,
+        200
+      ],
+      "parameters": {}
+    },
+    {
+      "id": "a1f0c0de-0003-4000-8000-000000000003",
+      "name": "Trabajos",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        240,
+        100
+      ],
+      "parameters": {
+        "jsCode": "// n8n · F12 · nodo \"Trabajos\" (Code, una vez para todos los elementos).\n// Arma la lista de consultas a Google que luego se guardan en Supabase.\n//  - Cada hora: Google Analytics de los últimos 3 días (los datos de GA4 se ajustan durante ~48 h).\n//  - A las 7 a. m. de Bogotá: además, Search Console de los últimos 6 días (Google publica con 2-3 días de retraso).\n//  - Corrido a mano: histórico completo por tramos de 31 días (GA4 desde 2024-01-01, Search Console 16 meses).\nconst PROPIEDAD_GA4 = '333145660';\nconst SITIO_GSC = 'sc-domain:wiptool.com';\nconst INICIO_GA4 = '2024-01-01';\n\nconst hoy = new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Bogota' }).format(new Date());\nconst hora = Number(new Intl.DateTimeFormat('en-US', { timeZone: 'America/Bogota', hour: 'numeric', hourCycle: 'h23' }).format(new Date()));\nconst manual = !$input.first().json.timestamp; // el disparador de cada hora trae \"timestamp\"; el manual no\n\nconst sumar = (f, n) => { const d = new Date(f + 'T00:00:00Z'); d.setUTCDate(d.getUTCDate() + n); return d.toISOString().slice(0, 10); };\nconst tramos = (desde, hasta, dias) => {\n  const out = [];\n  for (let a = desde; a <= hasta; a = sumar(a, dias)) { const b = sumar(a, dias - 1); out.push([a, b < hasta ? b : hasta]); }\n  return out;\n};\n\nconst GA4 = {\n  ga4_canal_diario: {\n    dimensions: ['date', 'sessionDefaultChannelGroup', 'sessionSource', 'sessionMedium', 'sessionCampaignName', 'sessionManualAdContent', 'sessionManualTerm'],\n    metrics: ['sessions', 'keyEvents'],\n  },\n  ga4_evento_diario: { dimensions: ['date', 'eventName', 'customEvent:origen', 'customEvent:correo'], metrics: ['eventCount', 'keyEvents', 'totalUsers'] },\n  ga4_pagina_diario: { dimensions: ['date', 'landingPage'], metrics: ['sessions', 'keyEvents'] },\n  ga4_audiencia_diario: { dimensions: ['date', 'countryId', 'deviceCategory'], metrics: ['sessions', 'keyEvents'] },\n};\n\nconst trabajos = [];\nfor (const [desde, hasta] of manual ? tramos(INICIO_GA4, hoy, 31) : [[sumar(hoy, -2), hoy]]) {\n  for (const [tabla, r] of Object.entries(GA4)) {\n    trabajos.push({\n      fuente: 'ga4', tabla, desde, hasta, sitio: null,\n      url: `https://analyticsdata.googleapis.com/v1beta/properties/${PROPIEDAD_GA4}:runReport`,\n      body: {\n        dateRanges: [{ startDate: desde, endDate: hasta }],\n        dimensions: r.dimensions.map((name) => ({ name })),\n        metrics: r.metrics.map((name) => ({ name })),\n        limit: 250000,\n      },\n    });\n  }\n}\n\nif (manual || hora === 7) {\n  // Un mismo dominio en Search Console: se separa por el host de la página.\n  const SITIOS = { 'wiptool.com': 'notContains', 'platform.wiptool.com': 'contains' };\n  const TABLAS = { gsc_pagina_diario: ['date', 'page'], gsc_consulta_diario: ['date', 'query'] };\n  for (const [desde, hasta] of manual ? tramos(sumar(hoy, -486), sumar(hoy, -1), 31) : [[sumar(hoy, -6), sumar(hoy, -1)]]) {\n    for (const [sitio, operador] of Object.entries(SITIOS)) {\n      for (const [tabla, dimensions] of Object.entries(TABLAS)) {\n        trabajos.push({\n          fuente: 'gsc', tabla, desde, hasta, sitio,\n          url: `https://searchconsole.googleapis.com/webmasters/v3/sites/${encodeURIComponent(SITIO_GSC)}/searchAnalytics/query`,\n          body: {\n            startDate: desde, endDate: hasta, dimensions, rowLimit: 25000, dataState: 'all',\n            dimensionFilterGroups: [{ filters: [{ dimension: 'page', operator: operador, expression: 'platform.wiptool.com' }] }],\n          },\n        });\n      }\n    }\n  }\n}\n\nreturn trabajos.map((json) => ({ json }));\n"
+      }
+    },
+    {
+      "id": "a1f0c0de-0004-4000-8000-000000000004",
+      "name": "Consultar Google",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        480,
+        100
+      ],
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $json.url }}",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "googleOAuth2Api",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify($json.body) }}",
+        "options": {
+          "batching": {
+            "batch": {
+              "batchSize": 1,
+              "batchInterval": 300
+            }
+          }
+        }
+      }
+    },
+    {
+      "id": "a1f0c0de-0005-4000-8000-000000000005",
+      "name": "Filas",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        720,
+        100
+      ],
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "// n8n · F12 · nodo \"Filas\" (Code, una vez por elemento).\n// Convierte la respuesta de Google en filas de la tabla de Supabase y arma la llamada a cargar().\nconst t = $('Trabajos').item.json;\nconst r = $json;\n\nconst fecha = (s) => (s && s.length === 8 ? `${s.slice(0, 4)}-${s.slice(4, 6)}-${s.slice(6, 8)}` : s);\nconst paises = new Intl.DisplayNames(['es'], { type: 'region' });\nconst pais = (id) => { if (!id || id === '(not set)') return '(sin país)'; try { return paises.of(id) || id; } catch (e) { return id; } };\n\n// Suma las filas que comparten la misma clave (evita claves repetidas al insertar).\nfunction agrupar(filas, claves, sumas) {\n  const m = new Map();\n  for (const f of filas) {\n    const k = claves.map((c) => f[c]).join('\\u0001');\n    const a = m.get(k);\n    if (a) sumas.forEach((s) => { a[s] += f[s]; }); else m.set(k, { ...f });\n  }\n  return [...m.values()];\n}\n\nlet filas = [];\nif (t.fuente === 'ga4') {\n  const dn = (r.dimensionHeaders || []).map((h) => h.name);\n  const mn = (r.metricHeaders || []).map((h) => h.name);\n  const regs = (r.rows || []).map((row) => {\n    const o = {};\n    dn.forEach((n, i) => { o[n] = row.dimensionValues[i].value; });\n    mn.forEach((n, i) => { o[n] = Math.round(Number(row.metricValues[i].value) || 0); });\n    return o;\n  });\n  const v = (x) => (x == null ? '' : String(x));\n  if (t.tabla === 'ga4_canal_diario') {\n    filas = agrupar(regs.map((o) => ({\n      fecha: fecha(o.date), canal: v(o.sessionDefaultChannelGroup), fuente: v(o.sessionSource), medio: v(o.sessionMedium),\n      campana: v(o.sessionCampaignName), contenido: v(o.sessionManualAdContent), termino: v(o.sessionManualTerm),\n      visitas: o.sessions, conversiones: o.keyEvents,\n    })), ['fecha', 'canal', 'fuente', 'medio', 'campana', 'contenido', 'termino'], ['visitas', 'conversiones']);\n  } else if (t.tabla === 'ga4_evento_diario') {\n    filas = agrupar(regs.map((o) => ({\n      fecha: fecha(o.date), evento: v(o.eventName), origen: v(o['customEvent:origen']), correo: v(o['customEvent:correo']),\n      eventos: o.eventCount, conversiones: o.keyEvents, personas: o.totalUsers,\n    })), ['fecha', 'evento', 'origen', 'correo'], ['eventos', 'conversiones', 'personas']);\n  } else if (t.tabla === 'ga4_pagina_diario') {\n    filas = agrupar(regs.map((o) => ({ fecha: fecha(o.date), pagina: v(o.landingPage) || '(sin página)', visitas: o.sessions, conversiones: o.keyEvents })),\n      ['fecha', 'pagina'], ['visitas', 'conversiones']);\n  } else if (t.tabla === 'ga4_audiencia_diario') {\n    filas = agrupar(regs.map((o) => ({ fecha: fecha(o.date), pais: pais(o.countryId), dispositivo: v(o.deviceCategory), visitas: o.sessions, conversiones: o.keyEvents })),\n      ['fecha', 'pais', 'dispositivo'], ['visitas', 'conversiones']);\n  }\n} else {\n  const campo = t.tabla === 'gsc_pagina_diario' ? 'pagina' : 'consulta';\n  filas = agrupar((r.rows || []).map((x) => ({\n    fecha: x.keys[0], sitio: t.sitio, [campo]: x.keys[1],\n    clics: Math.round(x.clicks || 0), impresiones: Math.round(x.impressions || 0), pos_x_imp: (x.position || 0) * (x.impressions || 0),\n  })), ['fecha', 'sitio', campo], ['clics', 'impresiones', 'pos_x_imp']);\n}\n\nreturn { json: { p_tabla: t.tabla, p_desde: t.desde, p_hasta: t.hasta, p_filas: filas, p_fuente: t.fuente, p_sitio: t.sitio } };\n"
+      }
+    },
+    {
+      "id": "a1f0c0de-0006-4000-8000-000000000006",
+      "name": "Guardar en Supabase",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        960,
+        100
+      ],
+      "parameters": {
+        "method": "POST",
+        "url": "https://tlpnkcroqenudzgiqzum.supabase.co/rest/v1/rpc/cargar",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify($json) }}",
+        "options": {
+          "batching": {
+            "batch": {
+              "batchSize": 1,
+              "batchInterval": 100
+            }
+          }
+        }
+      }
+    }
+  ],
+  "connections": {
+    "Cada hora": {
+      "main": [
+        [
+          {
+            "node": "Trabajos",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Cargar histórico (a mano)": {
+      "main": [
+        [
+          {
+            "node": "Trabajos",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Trabajos": {
+      "main": [
+        [
+          {
+            "node": "Consultar Google",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Consultar Google": {
+      "main": [
+        [
+          {
+            "node": "Filas",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Filas": {
+      "main": [
+        [
+          {
+            "node": "Guardar en Supabase",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "timezone": "America/Bogota",
+    "saveDataSuccessExecution": "none"
+  },
+  "pinData": {}
+}
