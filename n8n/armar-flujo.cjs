@@ -1,5 +1,5 @@
 // Arma los flujos de n8n a partir de los archivos .js de esta carpeta:
-//  - f12-carga-tablero.json: cada hora carga Google (Analytics y Search Console), Meta Ads, la TRM, Brevo y Explee a Supabase.
+//  - f12-carga-tablero.json: cada hora carga Google (Analytics y Search Console), Meta Ads, la TRM, Brevo, Explee y Kommo a Supabase.
 //  - f14-google-ads.json:    recibe lo que envía el script de Google Ads y lo guarda en Supabase.
 // Uso: node n8n/armar-flujo.cjs
 // Las credenciales se referencian por id (se crean a mano en n8n; las claves nunca van en este repositorio).
@@ -14,6 +14,7 @@ const CRED = {
   meta: { httpHeaderAuth: { id: 'uRqVoTmjjMMQhVze', name: 'Meta Ads (lectura)' } },
   brevo: { httpHeaderAuth: { id: 'eOtWousRPiKJpfVf', name: 'Brevo (lectura)' } },
   explee: { httpHeaderAuth: { id: '1K5Hj4X9btSUKWco', name: 'Explee' } },
+  kommo: { httpHeaderAuth: { id: 'wxfP9VZK9UBkShIS', name: 'Kommo (lectura)' } },
 };
 // Ruta del webhook que llama el script de Google Ads (difícil de adivinar; no da acceso a nada, solo recibe cifras).
 const RUTA_GADS = 'gads-7c1e4b9a2f6d48e3a51c';
@@ -39,6 +40,7 @@ const codigo = (id, name, posicion, archivo, porElemento, reemplazos = {}) => {
 const partes = (archivo) => Object.fromEntries(leer(archivo).split(/^\/\/ == /m).slice(1)
   .map((b) => { const i = b.indexOf('\n'); return [b.slice(0, i).replace(/\s*\(.*$/, '').trim(), b.slice(i + 1).trim() + '\n']; }));
 const EXPLEE = partes('explee.js');
+const KOMMO = partes('kommo.js');
 const codigoTexto = (id, name, posicion, js) => ({ id, name, type: 'n8n-nodes-base.code', typeVersion: 2, position: posicion, parameters: { jsCode: js } });
 const http = (id, name, posicion, extra) => ({
   id, name, type: 'n8n-nodes-base.httpRequest', typeVersion: 4.2, position: posicion,
@@ -48,7 +50,7 @@ const http = (id, name, posicion, extra) => ({
 const a = (nodo) => ({ main: [[{ node: nodo, type: 'main', index: 0 }]] });
 const varios = (...nodos) => ({ main: [nodos.map((node) => ({ node, type: 'main', index: 0 }))] });
 
-const INICIOS = ['Trabajos Google', 'Trabajos Meta', 'Trabajos TRM', 'Trabajos Brevo', 'Trabajos Explee'];
+const INICIOS = ['Trabajos Google', 'Trabajos Meta', 'Trabajos TRM', 'Trabajos Brevo', 'Trabajos Explee', 'Trabajos Kommo'];
 const f12 = {
   name: 'F12 · Carga del tablero (Google, Meta y TRM → Supabase)',
   nodes: [
@@ -90,6 +92,12 @@ const f12 = {
       credentials: CRED.explee }),
     codigoTexto('a1f0c0de-0020-4000-8000-000000000020', 'Filas Explee', [900, 900], EXPLEE['Filas Explee']),
 
+    codigoTexto('a1f0c0de-0021-4000-8000-000000000021', 'Trabajos Kommo', [260, 1100], KOMMO['Trabajos Kommo']),
+    http('a1f0c0de-0022-4000-8000-000000000022', 'Consultar Kommo', [500, 1100], {
+      parameters: { authentication: 'genericCredentialType', genericAuthType: 'httpHeaderAuth' },
+      credentials: CRED.kommo }),
+    codigoTexto('a1f0c0de-0023-4000-8000-000000000023', 'Filas Kommo', [740, 1100], KOMMO['Filas Kommo']),
+
     guardar('a1f0c0de-0006-4000-8000-000000000006', [1100, 300]),
   ],
   connections: {
@@ -101,6 +109,7 @@ const f12 = {
     'Trabajos Brevo': a('Consultar Brevo'), 'Consultar Brevo': a('Filas Brevo'), 'Filas Brevo': a('Guardar en Supabase'),
     'Trabajos Explee': a('Campañas Explee'), 'Campañas Explee': a('Pedidos Explee'), 'Pedidos Explee': a('Consultar Explee'),
     'Consultar Explee': a('Filas Explee'), 'Filas Explee': a('Guardar en Supabase'),
+    'Trabajos Kommo': a('Consultar Kommo'), 'Consultar Kommo': a('Filas Kommo'), 'Filas Kommo': a('Guardar en Supabase'),
   },
   settings: { executionOrder: 'v1', timezone: 'America/Bogota', saveDataSuccessExecution: 'none' },
   pinData: {},
