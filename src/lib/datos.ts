@@ -73,3 +73,13 @@ export interface Accionador {
   id: number; plataforma: string; tipo: string; accionador: string; enlace: string; que_hace: string; donde_se_ve: string;
   donde_se_usa: string; actualizado_por: string; actualizado: string;
 }
+
+export interface Embudo {
+  kpis: Kpis;
+  etapas: { etapa: string; tipo: string; oportunidades: number; valor: number }[];
+  por_origen: { origen: string; nuevas: number; agendadas: number; hechas: number; clientes: number; inversion: number; costo_reunion: number | null; costo_cliente: number | null }[];
+  tiempos: { a_agendada: number | null; a_hecha: number | null; a_cliente: number | null };
+  serie: { fecha: string; nuevas: number; agendadas: number }[];
+  perdidas: { motivo: string; oportunidades: number }[];
+  recientes: { fecha: string; nombre: string; etapa: string; origen: string; campana: string; responsable: string; valor: number }[];
+}

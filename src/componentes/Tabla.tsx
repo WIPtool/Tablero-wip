@@ -41,10 +41,11 @@ export function Tabla({ columnas, filas, limite = 10, total = false, vacio = 'Si
   const [asc, setAsc] = useState(ascendente);
   const [todo, setTodo] = useState(false);
 
-  const col = columnas.find((c) => c.campo === orden)!;
+  // El orden puede ser por un campo que no se muestra (por ejemplo, el orden de las etapas del embudo).
+  const col = columnas.find((c) => c.campo === orden);
   const ordenadas = [...filas].sort((a, b) => {
     const x = a[orden], y = b[orden];
-    const r = esNumero(col.tipo) ? (Number(x ?? -Infinity) - Number(y ?? -Infinity)) : String(x ?? '').localeCompare(String(y ?? ''), 'es');
+    const r = (col ? esNumero(col.tipo) : typeof x === 'number') ? (Number(x ?? -Infinity) - Number(y ?? -Infinity)) : String(x ?? '').localeCompare(String(y ?? ''), 'es');
     return asc ? r : -r;
   });
   const visibles = todo ? ordenadas : ordenadas.slice(0, limite);

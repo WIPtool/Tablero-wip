@@ -120,10 +120,10 @@ language sql immutable as $$
   end
 $$;
 
--- Nombre de etapa para el tablero (las de cierre de Kommo no se pueden renombrar por la API).
+-- Nombre de etapa para el tablero (las de cierre y la de entrada de Kommo no se pueden renombrar por la API y llegan en inglés).
 create or replace function etapa_tablero(p_nombre text, p_tipo text) returns text
 language sql immutable as $$
-  select case p_tipo when 'ganada' then 'Cliente activo' when 'perdida' then 'Perdido' else p_nombre end
+  select case p_tipo when 'ganada' then 'Cliente activo' when 'perdida' then 'Perdido' when 'entrantes' then 'Leads entrantes' else p_nombre end
 $$;
 
 create or replace function tablero_embudo(p_desde date, p_hasta date) returns jsonb

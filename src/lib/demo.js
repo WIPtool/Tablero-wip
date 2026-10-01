@@ -236,3 +236,27 @@ function prospeccion({ p_desde, p_hasta }) {
 }
 demo.tablero_email = email;
 demo.tablero_prospeccion = prospeccion;
+
+// T4: embudo (ejemplo).
+function embudo({ p_desde, p_hasta }) {
+  const f = dias(p_desde, p_hasta);
+  const serie = f.map((fecha) => { const x = azar('k' + fecha)(); return { fecha, nuevas: Math.round(1 + x * 4), agendadas: Math.round(x * 1.6) }; });
+  const nuevas = serie.reduce((a, x) => a + x.nuevas, 0), agendadas = serie.reduce((a, x) => a + x.agendadas, 0);
+  const inversion = pauta({ p_desde, p_hasta }).kpis.total;
+  return {
+    kpis: { nuevas, nuevas_ant: Math.round(nuevas * 0.8), agendadas, agendadas_ant: Math.round(agendadas * 0.7), hechas: Math.round(agendadas * 0.7), hechas_ant: 3,
+      clientes: 2, clientes_ant: 1, inversion, inversion_ant: Math.round(inversion * 0.9), abiertas: 34 },
+    etapas: [['Leads Entrantes', 'entrantes', 6], ['Nuevo', 'abierta', 14], ['Reunión agendada', 'abierta', 5], ['Reunión hecha', 'abierta', 4], ['Decidió tomar WIP', 'abierta', 3],
+      ['Factura enviada', 'abierta', 2], ['Cliente activo', 'ganada', 9], ['Perdido', 'perdida', 11]].map(([etapa, tipo, n]) => ({ etapa, tipo, oportunidades: n, valor: n * 450000 })),
+    por_origen: [
+      { origen: 'Meta Ads', nuevas: Math.round(nuevas * 0.6), agendadas: Math.round(agendadas * 0.5), hechas: 3, clientes: 1, inversion: Math.round(inversion * 0.9), costo_reunion: 180000, costo_cliente: 950000 },
+      { origen: 'Sitio web', nuevas: Math.round(nuevas * 0.25), agendadas: Math.round(agendadas * 0.3), hechas: 2, clientes: 1, inversion: 0, costo_reunion: null, costo_cliente: null },
+      { origen: 'Explee', nuevas: Math.round(nuevas * 0.15), agendadas: Math.round(agendadas * 0.2), hechas: 1, clientes: 0, inversion: Math.round(inversion * 0.06), costo_reunion: 65000, costo_cliente: null },
+    ],
+    tiempos: { a_agendada: 2.4, a_hecha: 5.1, a_cliente: 18.6 },
+    serie,
+    perdidas: [{ motivo: 'Presupuesto insuficiente', oportunidades: 3 }, { motivo: 'Sin motivo', oportunidades: 2 }],
+    recientes: [{ fecha: p_hasta, nombre: 'Transportes del Valle', etapa: 'Reunión agendada', origen: 'Meta Ads', campana: '', responsable: 'Misha Forero', valor: 600000 }],
+  };
+}
+demo.tablero_embudo = embudo;

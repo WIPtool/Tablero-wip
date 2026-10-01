@@ -47,8 +47,12 @@ export function Navegacion({ pie }: { pie: React.ReactNode }) {
       >
         <nav aria-label="Páginas del tablero" className="flex flex-col gap-0.5">
           {PAGINAS.map(enlace)}
-          <div className="px-2.5 pb-1.5 pt-3.5 text-[10.5px] uppercase tracking-[0.12em] text-lateral-suave">Próximas etapas</div>
-          {PROXIMAS.map(enlace)}
+          {PROXIMAS.length > 0 && (
+            <>
+              <div className="px-2.5 pb-1.5 pt-3.5 text-[10.5px] uppercase tracking-[0.12em] text-lateral-suave">Próximas etapas</div>
+              {PROXIMAS.map(enlace)}
+            </>
+          )}
         </nav>
         {pie}
       </div>

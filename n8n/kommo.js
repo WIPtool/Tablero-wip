@@ -26,6 +26,12 @@ const respuestas = $input.all();
 const dia = new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Bogota' });
 const fecha = (s) => (s ? dia.format(new Date(s * 1000)) : null);
 const iso = (s) => (s ? new Date(s * 1000).toISOString() : null);
+// Kommo responde application/hal+json y n8n lo deja como texto en "data"; las páginas vacías llegan sin cuerpo (204).
+const cuerpo = (r) => {
+  const j = r.json || {};
+  if (typeof j.data !== 'string') return j;
+  try { return JSON.parse(j.data); } catch (e) { return {}; }
+};
 const campo = (lead, prueba) => {
   const f = (lead.custom_fields_values || []).find(prueba);
   return f && f.values && f.values[0] ? String(f.values[0].value ?? '') : '';
@@ -35,7 +41,7 @@ const etapas = [], usuarios = {}, leads = new Map(), eventos = new Map();
 let rango = null;
 respuestas.forEach((r, i) => {
   const t = trabajos[i].json;
-  const e = (r.json && r.json._embedded) || {};
+  const e = cuerpo(r)._embedded || {};
   if (t.tipo === 'etapas') {
     for (const p of e.pipelines || []) {
       for (const s of (p._embedded && p._embedded.statuses) || []) {
