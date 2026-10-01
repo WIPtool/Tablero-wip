@@ -36,6 +36,5 @@ export async function proxy(request: NextRequest) {
 }
 
 export const config = {
-  // /api/kommo recibe los webhooks de Kommo (no hay sesión; se protege con una clave en la dirección).
-  matcher: ['/((?!_next/static|_next/image|favicon|img/|robots.txt|api/kommo).*)'],
+  matcher: ['/((?!_next/static|_next/image|favicon|img/|robots.txt).*)'],
 };
