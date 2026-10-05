@@ -1,0 +1,615 @@
+{
+  "name": "F16 · Agente de WhatsApp con Claude (lo llama Kommo)",
+  "nodes": [
+    {
+      "id": "d4f0c0de-0001-4000-8000-000000000001",
+      "name": "Mensaje de Kommo",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        0,
+        0
+      ],
+      "webhookId": "d4f0c0de-0001-4000-8000-0000000c0de7",
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "agente-wa-8d2e61c4b7f94a05a3e9",
+        "responseMode": "onReceived",
+        "options": {}
+      }
+    },
+    {
+      "id": "d4f0c0de-0002-4000-8000-000000000002",
+      "name": "Mensaje entrante",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        200,
+        0
+      ],
+      "parameters": {
+        "jsCode": "// Kommo manda el webhook como formulario: message[add][0][text], [element_id] (oportunidad), [talk_id], [id], [created_at], [attachment][type].\nconst b = $input.first().json.body || {};\n// n8n puede entregar el formulario anidado (message.add[0].text) o con las claves planas (\"message[add][0][text]\").\nconst m =(b.message && b.message.add && b.message.add[0]) || {\n  text: b['message[add][0][text]'], element_id: b['message[add][0][element_id]'], element_type: b['message[add][0][element_type]'],\n  entity_id: b['message[add][0][entity_id]'], entity_type: b['message[add][0][entity_type]'], talk_id: b['message[add][0][talk_id]'],\n  id: b['message[add][0][id]'], created_at: b['message[add][0][created_at]'], type: b['message[add][0][type]'],\n  attachment: { type: b['message[add][0][attachment][type]'] },\n};\nif (m.type && m.type !== 'incoming') return [];\n// La oportunidad: element_id cuando element_type es 2 (lead); si no, entity_id cuando entity_type es \"lead\".\nconst lead = Number(String(m.element_type) === '2' ? m.element_id : (String(m.entity_type) === 'lead' ? m.entity_id : m.element_id));\nif (!lead) return [];\nconst adjunto = m.attachment && m.attachment.type ? `[La persona envió un ${m.attachment.type === 'voice' ? 'audio' : 'archivo (' + m.attachment.type + ')'}]` : '';\nconst texto = String(m.text || '').trim() || adjunto;\nif (!texto) return [];\nreturn [{ json: { lead_id: lead, mensaje_id: String(m.id || `${lead}-${m.created_at || Date.now()}`), talk_id: String(m.talk_id || ''), texto,\n  momento: m.created_at ? new Date(Number(m.created_at) * 1000).toISOString() : new Date().toISOString() } }];\n"
+      }
+    },
+    {
+      "id": "d4f0c0de-0003-4000-8000-000000000003",
+      "name": "Guardar mensaje",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        400,
+        0
+      ],
+      "parameters": {
+        "method": "POST",
+        "url": "https://tlpnkcroqenudzgiqzum.supabase.co/rest/v1/agente_mensajes?on_conflict=mensaje_id",
+        "options": {
+          "batching": {
+            "batch": {
+              "batchSize": 1,
+              "batchInterval": 300
+            }
+          }
+        },
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Prefer",
+              "value": "resolution=ignore-duplicates,return=minimal"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ lead_id: $json.lead_id, rol: \"cliente\", texto: $json.texto, mensaje_id: $json.mensaje_id, talk_id: $json.talk_id, momento: $json.momento }) }}"
+      },
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "us3OmK2VUvuuu7t8",
+          "name": "Supabase (tablero)"
+        }
+      }
+    },
+    {
+      "id": "d4f0c0de-0004-4000-8000-000000000004",
+      "name": "Esperar",
+      "type": "n8n-nodes-base.wait",
+      "typeVersion": 1.1,
+      "position": [
+        600,
+        0
+      ],
+      "webhookId": "d4f0c0de-0004-4000-8000-0000000c0de8",
+      "parameters": {
+        "amount": 20,
+        "unit": "seconds"
+      }
+    },
+    {
+      "id": "d4f0c0de-0005-4000-8000-000000000005",
+      "name": "Historial",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        800,
+        0
+      ],
+      "parameters": {
+        "method": "GET",
+        "url": "=https://tlpnkcroqenudzgiqzum.supabase.co/rest/v1/agente_mensajes?select=rol,texto,mensaje_id,momento&lead_id=eq.{{ $('Mensaje entrante').first().json.lead_id }}&order=momento.desc&limit=40",
+        "options": {
+          "batching": {
+            "batch": {
+              "batchSize": 1,
+              "batchInterval": 300
+            }
+          }
+        },
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth"
+      },
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "us3OmK2VUvuuu7t8",
+          "name": "Supabase (tablero)"
+        }
+      },
+      "alwaysOutputData": true
+    },
+    {
+      "id": "d4f0c0de-0006-4000-8000-000000000006",
+      "name": "Lead en Kommo",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1000,
+        0
+      ],
+      "parameters": {
+        "method": "GET",
+        "url": "=https://wiptool.kommo.com/api/v4/leads/{{ $('Mensaje entrante').first().json.lead_id }}",
+        "options": {
+          "batching": {
+            "batch": {
+              "batchSize": 1,
+              "batchInterval": 300
+            }
+          }
+        },
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth"
+      },
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "wxfP9VZK9UBkShIS",
+          "name": "Kommo (lectura)"
+        }
+      },
+      "executeOnce": true
+    },
+    {
+      "id": "d4f0c0de-0007-4000-8000-000000000007",
+      "name": "Decidir y preguntar a Claude",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1200,
+        0
+      ],
+      "parameters": {
+        "jsCode": "// Revisa que este siga siendo el último mensaje del cliente y que la oportunidad sea un prospecto; arma el pedido a Claude.\nconst MODELO = 'claude-sonnet-5-5';\nconst ETAPAS_AGENTE = new Set([112413247, 112413251]); // Leads entrantes y Nuevo\nconst ORIGEN_UTM = { 'Meta Ads': 'meta_ads', Instagram: 'instagram', Facebook: 'facebook', Explee: 'explee', 'Correo (Brevo)': 'brevo',\n  'Sitio web': 'sitio_web', 'Google Ads': 'google', LinkedIn: 'linkedin', Referido: 'referido', 'App sin app': 'app_sin_app' };\nconst yo = $('Mensaje entrante').first().json;\nconst historial = $('Historial').all().map((i) => i.json).filter((h) => h.rol).reverse(); // llega del más nuevo al más viejo\nconst leadR = $input.first().json;\nconst lead = typeof leadR.data === 'string' ? JSON.parse(leadR.data) : leadR;\nconst ultimoCliente = historial.filter((h) => h.rol === 'cliente').pop();\nif (ultimoCliente && ultimoCliente.mensaje_id !== yo.mensaje_id) return []; // llegó otro mensaje después: responde esa ejecución\nif (!ETAPAS_AGENTE.has(Number(lead.status_id))) return [];\nconst etiquetas = ((lead._embedded && lead._embedded.tags) || []).map((t) => t.name);\nif (etiquetas.includes('Atender persona') || etiquetas.includes('Agente pausado')) return [];\n// Modo prueba: mientras esté activo, solo responde a oportunidades con la etiqueta \"Prueba agente\".\nconst MODO_PRUEBA = true;\nif (MODO_PRUEBA && !etiquetas.includes('Prueba agente')) return [];\nconst campo = (n) => { const f = (lead.custom_fields_values || []).find((x) => x.field_name === n); return f && f.values[0] ? String(f.values[0].value) : ''; };\nconst origen = campo('Origen');\nconst agenda = `https://calendly.com/comercial-wiptool/acercamiento-wip?utm_source=${ORIGEN_UTM[origen] || 'whatsapp'}&utm_medium=agente_whatsapp&utm_content=kommo-${lead.id}`;\n// Historial en formato de Claude: cliente → user, agente → assistant; mensajes seguidos del mismo rol se juntan.\nconst mensajes = [];\nfor (const h of historial.slice(-30)) {\n  const role = h.rol === 'agente' ? 'assistant' : 'user';\n  const ult = mensajes[mensajes.length - 1];\n  if (ult && ult.role === role) ult.content += '\\n' + h.texto; else mensajes.push({ role, content: h.texto });\n}\nif (!mensajes.length || mensajes[0].role !== 'user') mensajes.unshift({ role: 'user', content: '(inicio de la conversación)' });\nif (mensajes[mensajes.length - 1].role !== 'user') return [];\nconst hoy = new Intl.DateTimeFormat('es-CO', { timeZone: 'America/Bogota', dateStyle: 'full', timeStyle: 'short' }).format(new Date());\nconst sistema = `Eres el asistente de WIP (wiptool.com) que atiende por WhatsApp a las personas que escriben interesadas en WIP, muchas veces desde un anuncio de Facebook o Instagram. Escribes en español, como una persona del equipo comercial: cercano, claro y breve.\n\n# Tu objetivo\nResolver la duda de la persona con información correcta y llevarla a agendar una reunión con un asesor WIP, donde se cotiza y se muestra WIP en vivo. Agendar la reunión es el éxito de la conversación.\n\n# Cómo escribes\n- Mensajes cortos, como en WhatsApp: 1 a 4 frases. Nada de listas largas, títulos ni markdown (no uses asteriscos ni almohadillas).\n- Una sola pregunta por mensaje.\n- Tutea con respeto. Sin emojis, o como mucho uno.\n- Nunca inventes datos, cifras, clientes, integraciones ni funciones. Si no sabes algo, dilo y ofrece que un asesor lo confirme.\n- No prometas descuentos, precios cerrados, fechas de implementación exactas ni desarrollos a la medida.\n- Si la persona escribe en otro idioma, respóndele en ese idioma.\n\n# Cómo llevas la conversación\n1. Responde primero lo que la persona preguntó.\n2. Entiende su operación con preguntas naturales, de a una: a qué se dedica la empresa, si presta los servicios con equipo propio o con una red de proveedores, cuántos servicios maneja al mes y en qué país opera.\n3. En cuanto haya interés, ofrece la reunión con el enlace de agenda (está en el contexto de esta conversación). Ejemplo: \"Te propongo una reunión corta con un asesor para ver tu caso y mostrarte WIP en vivo. Puedes elegir el horario aquí: <enlace>\".\n4. Si la persona ya agendó, agradece y confirma que el asesor la contactará.\n\n# Cuándo pasar a una persona (pasar_a_persona = true)\n- La persona pide hablar con alguien, pide que la llamen o insiste en algo que no puedes resolver.\n- Es un cliente actual de WIP, un proveedor, un técnico o alguien con un problema operativo, de soporte o de facturación.\n- Quiere una cotización formal, condiciones contractuales o una integración específica que requiere al equipo.\n- Está molesta o la conversación se sale de vender WIP (empleo, ventas de terceros, spam).\nEn esos casos responde con un mensaje corto diciendo que un asesor del equipo continúa la conversación por este mismo chat, y explica el motivo en motivo_traspaso.\n\n# Lo que sabes de WIP\nWIP es una plataforma de gestión de servicios en campo (FSM) para empresas que coordinan servicios fuera de la oficina: instalaciones, mantenimientos, asistencias o inspecciones, con equipo propio, con una red de proveedores externos o con ambos. Asigna cada servicio, permite seguirlo en tiempo real y cerrarlo con evidencia (fotos, firmas y formularios), mide tiempos y cumplimiento de SLA y calcula tarifas.\n\nDos productos:\n- WIP Equipos: para empresas que prestan los servicios con su propio equipo en campo (técnicos, cuadrillas, conductores). Asignas, haces seguimiento, cobras y le respondes al cliente desde un solo lugar, sin depender de Excel y WhatsApp.\n- WIP Redes: para corporativos que no atienden directamente sino que coordinan una red de proveedores externos (grúas, técnicos, cerrajeros, ajustadores) y necesitan controlar tiempos, cumplimiento y trazabilidad.\nEn resumen: si su gente hace el servicio, es WIP Equipos; si gestiona una red que lo hace por ella, es WIP Redes.\n\nLo que hace:\n- Asignación del servicio al recurso más adecuado según cercanía, cobertura, tarifas por convenio, prioridad, disponibilidad y desempeño. Hay asignación inteligente con IA.\n- Seguimiento en tiempo real en un mapa: quién está disponible, quién va en camino y quién llegó. La ubicación sale de la app de WIP en el celular del técnico; no hay que comprar ni instalar GPS.\n- Estados de cada servicio (asignado, en camino, en sitio, finalizado) con hora, ubicación y evidencias.\n- Experiencia \"app sin app\": el cliente final recibe por WhatsApp cada evento del servicio (quién va y si ya llegó) y puede calificar, sin descargar nada. Para clientes corporativos hay un perfil propio desde donde solicitan servicios y ven todo en tiempo real.\n- Tarifas automáticas por proveedor, formularios configurables, reportes y analítica, y reportes por correo con IA para los clientes.\n- Es parametrizable: formularios, estados, tarifas y flujos se configuran según cómo opera cada empresa, con acompañamiento del equipo WIP.\n- Se puede integrar con otras herramientas; WIP tiene un área de integraciones y se dimensiona según lo que se necesite.\n- Sirve para cualquier tamaño: 3, 30, 300 o los técnicos que necesites. Hay empresas que gestionan 70.000 servicios al mes y más. Nunca digas que hay un límite de técnicos.\n- WIP no es un CRM, ni un sistema de compras o inventario, ni un software de historia clínica: gestiona la operación de los servicios en campo. WIP no presta servicios de grúa ni de asistencia: es el software que usan las empresas que los prestan o los coordinan.\n\nIndustrias: aseguradoras y empresas de asistencia (vial, hogar, médica, veterinaria y legal), empresas de grúas y flotas de servicio, telecomunicaciones, energía e instalación de internet, servicio técnico e instalaciones, servicios a domicilio, mensajería y logística.\n\nPresencia: opera en 10 países de Latinoamérica (Colombia, México, Perú, Chile, Ecuador, Honduras, Guatemala, Panamá, Nicaragua y El Salvador) y ha gestionado más de 4 millones de servicios.\n\nPrecios (responde así cuando pregunten cuánto cuesta): depende de la operación. Para empresas corporativas se entienden primero sus necesidades, integraciones y desarrollos adicionales y se arma una cotización a la medida. Para Pymes con equipo propio hay planes mensuales según el volumen de servicios al mes (Plan Básico hasta 200 servicios, Avanzado hasta 550 y Pro hasta 1.200, con más servicios a la medida), y se pueden ver en wiptool.com/equipos#planes. No des cifras de precio: ofrece la reunión para cotizar según su caso. La implementación, la configuración de flujos y la capacitación están incluidas, sin costo de arranque. No hay cláusulas de permanencia y se puede cambiar de plan cuando quieran.\n\nImplementación: ágil, en días y no en meses; el tiempo exacto depende del tamaño de la red y de las integraciones, y se dimensiona en la primera conversación.\n\nSoporte: onboarding y capacitación del equipo; soporte operativo de lunes a viernes de 8:00 a.m. a 5:00 p.m. (hora Colombia) y soporte técnico 24/7, en español.\n\n# Contexto de esta conversación\n- Fecha y hora en Colombia: ${hoy}\n- La persona llegó por: ${origen || 'origen desconocido'}\n- Enlace para agendar la reunión (úsalo tal cual): ${agenda}`;\nconst herramienta = {\n  name: 'responder',\n  description: 'Devuelve el próximo mensaje de WhatsApp para la persona y lo que aprendiste de ella.',\n  input_schema: {\n    type: 'object',\n    properties: {\n      respuesta: { type: 'string', description: 'El mensaje de WhatsApp, corto y sin markdown.' },\n      pasar_a_persona: { type: 'boolean', description: 'true si un asesor debe continuar la conversación.' },\n      motivo_traspaso: { type: 'string', description: 'Si pasar_a_persona es true: resumen breve de la conversación y por qué.' },\n      datos: {\n        type: 'object', description: 'Lo que la persona dijo de su operación (vacío si no lo dijo).',\n        properties: { empresa: { type: 'string' }, pais: { type: 'string' }, tipo_operacion: { type: 'string' },\n          servicios_mes: { type: 'string' }, correo: { type: 'string' }, quiere_reunion: { type: 'boolean' } },\n      },\n    },\n    required: ['respuesta', 'pasar_a_persona'],\n  },\n};\nreturn [{ json: { lead_id: lead.id, responsable: lead.responsible_user_id, nombre_lead: lead.name, origen,\n  pedido: { model: MODELO, max_tokens: 1024, system: sistema, messages: mensajes, tools: [herramienta], tool_choice: { type: 'tool', name: 'responder' } } } }];\n"
+      }
+    },
+    {
+      "id": "d4f0c0de-0008-4000-8000-000000000008",
+      "name": "Claude",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1400,
+        0
+      ],
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.anthropic.com/v1/messages",
+        "options": {
+          "batching": {
+            "batch": {
+              "batchSize": 1,
+              "batchInterval": 300
+            }
+          }
+        },
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "anthropicApi",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "anthropic-version",
+              "value": "2023-06-01"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify($json.pedido) }}"
+      },
+      "credentials": {
+        "anthropicApi": {
+          "id": "lI6pyiToLgn65AwG",
+          "name": "Claude (agente WhatsApp)"
+        }
+      }
+    },
+    {
+      "id": "d4f0c0de-0009-4000-8000-000000000009",
+      "name": "Respuesta de Claude",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1600,
+        0
+      ],
+      "parameters": {
+        "jsCode": "// Saca la respuesta y arma lo que se escribe en Kommo y en Supabase.\nconst CAMPO_RESPUESTA = 493668;\nconst BOT_RESPUESTA = 16206;\nconst ctx = $('Decidir y preguntar a Claude').first().json;\nconst r = $input.first().json;\nconst uso = (r.content || []).find((c) => c.type === 'tool_use');\nif (!uso || !uso.input || !uso.input.respuesta) throw new Error('Claude no devolvió una respuesta: ' + JSON.stringify(r).slice(0, 300));\nconst x = uso.input;\nconst texto = String(x.respuesta).replace(/\\*\\*?|__|^#+\\s*/gm, '').trim().slice(0, 1500);\nconst traspaso = x.pasar_a_persona === true;\nconst d = x.datos || {};\nconst datos = [d.empresa && `Empresa: ${d.empresa}`, d.pais && `País: ${d.pais}`, d.tipo_operacion && `Operación: ${d.tipo_operacion}`,\n  d.servicios_mes && `Servicios al mes: ${d.servicios_mes}`, d.correo && `Correo: ${d.correo}`].filter(Boolean).join('\\n');\nreturn [{ json: {\n  lead_id: ctx.lead_id, texto, traspaso, responsable: ctx.responsable,\n  kommo: [{ id: ctx.lead_id, custom_fields_values: [{ field_id: CAMPO_RESPUESTA, values: [{ value: texto }] }],\n    ...(traspaso ? { tags_to_add: [{ name: 'Atender persona' }] } : {}) }],\n  bot: [{ bot_id: BOT_RESPUESTA, entity_id: ctx.lead_id, entity_type: 2 }],\n  guardar: { lead_id: ctx.lead_id, rol: 'agente', texto, momento: new Date().toISOString() },\n  tarea: [{ entity_id: ctx.lead_id, entity_type: 'leads', responsible_user_id: ctx.responsable, task_type_id: 1,\n    text: `Atender por WhatsApp: ${x.motivo_traspaso || 'el agente pasó la conversación'}`.slice(0, 500),\n    complete_till: Math.floor(Date.now() / 1000) + 3600 }],\n  nota: [{ entity_id: ctx.lead_id, note_type: 'common', params: { text: `El agente de WhatsApp pasó la conversación a una persona.\\nMotivo: ${x.motivo_traspaso || '—'}${datos ? '\\n' + datos : ''}` } }],\n  correo: { sender: { name: 'Agente WIP', email: 'comercial@wiptool.com' }, to: [{ email: 'comercial@wiptool.com' }],\n    subject: `Atender por WhatsApp: ${ctx.nombre_lead || 'oportunidad ' + ctx.lead_id}`,\n    htmlContent: `<p>El agente de WhatsApp pasó esta conversación a una persona.</p><p><b>Motivo:</b> ${String(x.motivo_traspaso || '—').replace(/</g, '&lt;')}</p>${datos ? '<p>' + datos.replace(/</g, '&lt;').replace(/\\n/g, '<br>') + '</p>' : ''}<p><a href=\"https://wiptool.kommo.com/leads/detail/${ctx.lead_id}\">Abrir en Kommo</a></p>` },\n} }];\n"
+      }
+    },
+    {
+      "id": "d4f0c0de-0010-4000-8000-000000000010",
+      "name": "Escribir respuesta en Kommo",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1800,
+        0
+      ],
+      "parameters": {
+        "method": "PATCH",
+        "url": "https://wiptool.kommo.com/api/v4/leads",
+        "options": {
+          "batching": {
+            "batch": {
+              "batchSize": 1,
+              "batchInterval": 300
+            }
+          }
+        },
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify($json.kommo) }}"
+      },
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "wxfP9VZK9UBkShIS",
+          "name": "Kommo (lectura)"
+        }
+      }
+    },
+    {
+      "id": "d4f0c0de-0011-4000-8000-000000000011",
+      "name": "Enviar por WhatsApp",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        2000,
+        0
+      ],
+      "parameters": {
+        "method": "POST",
+        "url": "https://wiptool.kommo.com/api/v2/salesbot/run",
+        "options": {
+          "batching": {
+            "batch": {
+              "batchSize": 1,
+              "batchInterval": 300
+            }
+          }
+        },
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify($('Respuesta de Claude').first().json.bot) }}"
+      },
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "wxfP9VZK9UBkShIS",
+          "name": "Kommo (lectura)"
+        }
+      }
+    },
+    {
+      "id": "d4f0c0de-0012-4000-8000-000000000012",
+      "name": "Guardar respuesta",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        2200,
+        0
+      ],
+      "parameters": {
+        "method": "POST",
+        "url": "https://tlpnkcroqenudzgiqzum.supabase.co/rest/v1/agente_mensajes",
+        "options": {
+          "batching": {
+            "batch": {
+              "batchSize": 1,
+              "batchInterval": 300
+            }
+          }
+        },
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Prefer",
+              "value": "return=minimal"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify($('Respuesta de Claude').first().json.guardar) }}"
+      },
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "us3OmK2VUvuuu7t8",
+          "name": "Supabase (tablero)"
+        }
+      }
+    },
+    {
+      "id": "d4f0c0de-0013-4000-8000-000000000013",
+      "name": "Solo si pasa a persona",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2400,
+        0
+      ],
+      "parameters": {
+        "jsCode": "return $('Respuesta de Claude').first().json.traspaso ? [{ json: {} }] : [];\n"
+      }
+    },
+    {
+      "id": "d4f0c0de-0014-4000-8000-000000000014",
+      "name": "Tarea en Kommo",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        2600,
+        0
+      ],
+      "parameters": {
+        "method": "POST",
+        "url": "https://wiptool.kommo.com/api/v4/tasks",
+        "options": {
+          "batching": {
+            "batch": {
+              "batchSize": 1,
+              "batchInterval": 300
+            }
+          }
+        },
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify($('Respuesta de Claude').first().json.tarea) }}"
+      },
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "wxfP9VZK9UBkShIS",
+          "name": "Kommo (lectura)"
+        }
+      }
+    },
+    {
+      "id": "d4f0c0de-0015-4000-8000-000000000015",
+      "name": "Nota de traspaso",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        2800,
+        0
+      ],
+      "parameters": {
+        "method": "POST",
+        "url": "https://wiptool.kommo.com/api/v4/leads/notes",
+        "options": {
+          "batching": {
+            "batch": {
+              "batchSize": 1,
+              "batchInterval": 300
+            }
+          }
+        },
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify($('Respuesta de Claude').first().json.nota) }}"
+      },
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "wxfP9VZK9UBkShIS",
+          "name": "Kommo (lectura)"
+        }
+      }
+    },
+    {
+      "id": "d4f0c0de-0016-4000-8000-000000000016",
+      "name": "Correo de traspaso",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        3000,
+        0
+      ],
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.brevo.com/v3/smtp/email",
+        "options": {
+          "batching": {
+            "batch": {
+              "batchSize": 1,
+              "batchInterval": 300
+            }
+          }
+        },
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify($('Respuesta de Claude').first().json.correo) }}"
+      },
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "eOtWousRPiKJpfVf",
+          "name": "Brevo (lectura)"
+        }
+      },
+      "onError": "continueRegularOutput"
+    }
+  ],
+  "connections": {
+    "Mensaje de Kommo": {
+      "main": [
+        [
+          {
+            "node": "Mensaje entrante",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Mensaje entrante": {
+      "main": [
+        [
+          {
+            "node": "Guardar mensaje",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Guardar mensaje": {
+      "main": [
+        [
+          {
+            "node": "Esperar",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Esperar": {
+      "main": [
+        [
+          {
+            "node": "Historial",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Historial": {
+      "main": [
+        [
+          {
+            "node": "Lead en Kommo",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Lead en Kommo": {
+      "main": [
+        [
+          {
+            "node": "Decidir y preguntar a Claude",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Decidir y preguntar a Claude": {
+      "main": [
+        [
+          {
+            "node": "Claude",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Claude": {
+      "main": [
+        [
+          {
+            "node": "Respuesta de Claude",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Respuesta de Claude": {
+      "main": [
+        [
+          {
+            "node": "Escribir respuesta en Kommo",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Escribir respuesta en Kommo": {
+      "main": [
+        [
+          {
+            "node": "Enviar por WhatsApp",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Enviar por WhatsApp": {
+      "main": [
+        [
+          {
+            "node": "Guardar respuesta",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Guardar respuesta": {
+      "main": [
+        [
+          {
+            "node": "Solo si pasa a persona",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Solo si pasa a persona": {
+      "main": [
+        [
+          {
+            "node": "Tarea en Kommo",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Tarea en Kommo": {
+      "main": [
+        [
+          {
+            "node": "Nota de traspaso",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Nota de traspaso": {
+      "main": [
+        [
+          {
+            "node": "Correo de traspaso",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "timezone": "America/Bogota"
+  },
+  "pinData": {}
+}

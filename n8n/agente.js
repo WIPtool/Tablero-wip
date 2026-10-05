@@ -1,6 +1,6 @@
 // n8n · F7 · agente de WhatsApp con Claude. armar-flujo.cjs toma cada parte por su marca "// ==" y reemplaza
 // __CAMPO_RESPUESTA__ (campo de oportunidad "Respuesta del agente"), __BOT_RESPUESTA__ (Salesbot que envía ese campo
-// por WhatsApp) e __INSTRUCCIONES__ (agente-instrucciones.md).
+// por WhatsApp), __INSTRUCCIONES__ (agente-instrucciones.md) y __MODO_PRUEBA__ (true: solo etiqueta "Prueba agente").
 // Flujo: Kommo avisa cada mensaje entrante → se guarda → se esperan unos segundos (la gente escribe en varios mensajes) →
 // si sigue siendo el último mensaje y la oportunidad es un prospecto (Leads entrantes o Nuevo, sin etiqueta "Atender persona"
 // ni "Agente pausado"), Claude responde con el historial → la respuesta va al campo y el Salesbot la envía por WhatsApp.
@@ -41,6 +41,9 @@ if (ultimoCliente && ultimoCliente.mensaje_id !== yo.mensaje_id) return []; // l
 if (!ETAPAS_AGENTE.has(Number(lead.status_id))) return [];
 const etiquetas = ((lead._embedded && lead._embedded.tags) || []).map((t) => t.name);
 if (etiquetas.includes('Atender persona') || etiquetas.includes('Agente pausado')) return [];
+// Modo prueba: mientras esté activo, solo responde a oportunidades con la etiqueta "Prueba agente".
+const MODO_PRUEBA = __MODO_PRUEBA__;
+if (MODO_PRUEBA && !etiquetas.includes('Prueba agente')) return [];
 const campo = (n) => { const f = (lead.custom_fields_values || []).find((x) => x.field_name === n); return f && f.values[0] ? String(f.values[0].value) : ''; };
 const origen = campo('Origen');
 const agenda = `https://calendly.com/comercial-wiptool/acercamiento-wip?utm_source=${ORIGEN_UTM[origen] || 'whatsapp'}&utm_medium=agente_whatsapp&utm_content=kommo-${lead.id}`;

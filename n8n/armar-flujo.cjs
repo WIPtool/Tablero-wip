@@ -6,7 +6,7 @@
 //  - f15-formularios-kommo.json: recibe los formularios del sitio (/api/contact) y los crea en Kommo con su Origen (F1).
 //  - f16-agente-whatsapp.json: agente de WhatsApp con Claude (F7); lo llama el webhook de Kommo "mensaje entrante".
 //    Necesita CRED_CLAUDE=<id de la credencial Anthropic "Claude (agente WhatsApp)">.
-// Uso: CRED_CALENDLY=0U9bkwTaH0qwcc9h node n8n/armar-flujo.cjs  (id de la credencial "Calendly (lectura)" en n8n)
+// Uso: CRED_CALENDLY=0U9bkwTaH0qwcc9h CRED_CLAUDE=lI6pyiToLgn65AwG node n8n/armar-flujo.cjs  (ids de las credenciales "Calendly (lectura)" y "Claude (agente WhatsApp)" en n8n)
 // Las credenciales se referencian por id (se crean a mano en n8n; las claves nunca van en este repositorio).
 const fs = require('fs');
 const path = require('path');
@@ -30,6 +30,8 @@ const RUTA_AGENTE = 'agente-wa-8d2e61c4b7f94a05a3e9';
 const CRED_CLAUDE = process.env.CRED_CLAUDE ? { anthropicApi: { id: process.env.CRED_CLAUDE, name: 'Claude (agente WhatsApp)' } } : null;
 const CAMPO_RESPUESTA = 493668; // oportunidad: "Respuesta del agente"
 const BOT_RESPUESTA = 16206;    // Salesbot "Agente WhatsApp: enviar respuesta" (envía ese campo por WhatsApp)
+// Modo prueba del agente: responde solo a oportunidades con la etiqueta "Prueba agente". AGENTE_EN_VIVO=1 lo quita.
+const MODO_PRUEBA = process.env.AGENTE_EN_VIVO !== '1';
 // Ruta del webhook que llama el script de Google Ads (difícil de adivinar; no da acceso a nada, solo recibe cifras).
 const RUTA_GADS = 'gads-7c1e4b9a2f6d48e3a51c';
 
@@ -286,7 +288,7 @@ if (CRED_CLAUDE) {
         credentials: CRED.supabase }), alwaysOutputData: true },
       { ...http(id(6), 'Lead en Kommo', [1000, 0], { parameters: {
         url: "=https://wiptool.kommo.com/api/v4/leads/{{ $('Mensaje entrante').first().json.lead_id }}", ...auth }, credentials: CRED.kommo }), executeOnce: true },
-      codigoTexto(id(7), 'Decidir y preguntar a Claude', [1200, 0], AGENTE['Decidir y preguntar a Claude'].split('__INSTRUCCIONES__').join(INSTRUCCIONES)),
+      codigoTexto(id(7), 'Decidir y preguntar a Claude', [1200, 0], AGENTE['Decidir y preguntar a Claude'].split('__INSTRUCCIONES__').join(INSTRUCCIONES).split('__MODO_PRUEBA__').join(String(MODO_PRUEBA))),
       http(id(8), 'Claude', [1400, 0], { parameters: { method: 'POST', url: 'https://api.anthropic.com/v1/messages',
         authentication: 'predefinedCredentialType', nodeCredentialType: 'anthropicApi',
         sendHeaders: true, headerParameters: { parameters: [{ name: 'anthropic-version', value: '2023-06-01' }] }, ...cuerpoJson('$json.pedido') },
