@@ -36,7 +36,9 @@ return nuevos.map((n, i) => {
   const contacto = [...contactos(porCorreo[i]), ...contactos(porTelefono[i])][0];
   const ultima = contacto && ((contacto._embedded && contacto._embedded.leads) || []).map((l) => l.id).sort((a, b) => b - a)[0];
   const base = { explee_id: f.lead_id, datos: f };
-  if (ultima) return { json: { ...base, accion: 'existente', contacto_id: contacto.id, kommo_lead_id: ultima, metodo: 'GET', url: `${BASE}/leads/${ultima}` } };
+  // Ya está en Kommo: a su última oportunidad solo se le agrega la etiqueta Explee (y luego la nota).
+  if (ultima) return { json: { ...base, accion: 'existente', contacto_id: contacto.id, kommo_lead_id: ultima, metodo: 'PATCH', url: `${BASE}/leads`,
+    cuerpo: [{ id: ultima, tags_to_add: [{ name: 'Explee' }] }] } };
 
   const lead = {
     name: f.empresa || f.nombre || f.correo, pipeline_id: EMBUDO, status_id: ETAPA_NUEVO,

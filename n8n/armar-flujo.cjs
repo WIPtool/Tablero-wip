@@ -114,7 +114,7 @@ const f12 = {
     codigoTexto('a1f0c0de-0028-4000-8000-000000000028', 'Armar oportunidades', [1700, 1000], F4['Armar oportunidades']),
     http('a1f0c0de-0029-4000-8000-000000000029', 'Crear en Kommo', [1860, 1000], {
       parameters: { method: '={{ $json.metodo }}', authentication: 'genericCredentialType', genericAuthType: 'httpHeaderAuth',
-        sendBody: "={{ $json.metodo === 'POST' }}", specifyBody: 'json', jsonBody: '={{ JSON.stringify($json.cuerpo) }}' },
+        sendBody: true, specifyBody: 'json', jsonBody: '={{ JSON.stringify($json.cuerpo) }}' },
       credentials: CRED.kommo }),
     codigoTexto('a1f0c0de-0030-4000-8000-000000000030', 'Nota de cada uno', [2020, 1000], F4['Nota de cada uno']),
     http('a1f0c0de-0031-4000-8000-000000000031', 'Nota en Kommo', [2180, 1000], {
