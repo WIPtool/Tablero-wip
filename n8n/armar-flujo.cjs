@@ -1,5 +1,6 @@
 // Arma los flujos de n8n a partir de los archivos .js de esta carpeta:
-//  - f12-carga-tablero.json: cada hora carga Google (Analytics y Search Console), Meta Ads, la TRM, Brevo, Explee y Kommo a Supabase.
+//  - f12-carga-tablero.json: cada hora carga Google (Analytics y Search Console), Meta Ads, la TRM, Brevo, Explee y Kommo a Supabase,
+//    y pasa a Kommo los leads calientes nuevos de Explee (F4, explee-kommo.js).
 //  - f14-google-ads.json:    recibe lo que envía el script de Google Ads y lo guarda en Supabase.
 // Uso: node n8n/armar-flujo.cjs
 // Las credenciales se referencian por id (se crean a mano en n8n; las claves nunca van en este repositorio).
@@ -41,6 +42,7 @@ const partes = (archivo) => Object.fromEntries(leer(archivo).split(/^\/\/ == /m)
   .map((b) => { const i = b.indexOf('\n'); return [b.slice(0, i).replace(/\s*\(.*$/, '').trim(), b.slice(i + 1).trim() + '\n']; }));
 const EXPLEE = partes('explee.js');
 const KOMMO = partes('kommo.js');
+const F4 = partes('explee-kommo.js');
 const codigoTexto = (id, name, posicion, js) => ({ id, name, type: 'n8n-nodes-base.code', typeVersion: 2, position: posicion, parameters: { jsCode: js } });
 const http = (id, name, posicion, extra) => ({
   id, name, type: 'n8n-nodes-base.httpRequest', typeVersion: 4.2, position: posicion,
@@ -98,6 +100,34 @@ const f12 = {
       credentials: CRED.kommo }),
     codigoTexto('a1f0c0de-0023-4000-8000-000000000023', 'Filas Kommo', [740, 1100], KOMMO['Filas Kommo']),
 
+    // F4 · Explee → Kommo (sale de "Filas Explee")
+    { ...http('a1f0c0de-0024-4000-8000-000000000024', 'Ya en Kommo', [1060, 1000], {
+      parameters: { url: `${SUPABASE}/rest/v1/explee_kommo?select=lead_id`, authentication: 'genericCredentialType', genericAuthType: 'httpHeaderAuth' },
+      credentials: CRED.supabase }), executeOnce: true, alwaysOutputData: true },
+    codigoTexto('a1f0c0de-0025-4000-8000-000000000025', 'Nuevos para Kommo', [1220, 1000], F4['Nuevos para Kommo']),
+    http('a1f0c0de-0026-4000-8000-000000000026', 'Buscar correo en Kommo', [1380, 1000], {
+      parameters: { url: '={{ $json.url_correo }}', authentication: 'genericCredentialType', genericAuthType: 'httpHeaderAuth' },
+      credentials: CRED.kommo }),
+    http('a1f0c0de-0027-4000-8000-000000000027', 'Buscar teléfono en Kommo', [1540, 1000], {
+      parameters: { url: "={{ $('Nuevos para Kommo').all()[$itemIndex].json.url_telefono }}", authentication: 'genericCredentialType', genericAuthType: 'httpHeaderAuth' },
+      credentials: CRED.kommo }),
+    codigoTexto('a1f0c0de-0028-4000-8000-000000000028', 'Armar oportunidades', [1700, 1000], F4['Armar oportunidades']),
+    http('a1f0c0de-0029-4000-8000-000000000029', 'Crear en Kommo', [1860, 1000], {
+      parameters: { method: '={{ $json.metodo }}', authentication: 'genericCredentialType', genericAuthType: 'httpHeaderAuth',
+        sendBody: "={{ $json.metodo === 'POST' }}", specifyBody: 'json', jsonBody: '={{ JSON.stringify($json.cuerpo) }}' },
+      credentials: CRED.kommo }),
+    codigoTexto('a1f0c0de-0030-4000-8000-000000000030', 'Nota de cada uno', [2020, 1000], F4['Nota de cada uno']),
+    http('a1f0c0de-0031-4000-8000-000000000031', 'Nota en Kommo', [2180, 1000], {
+      parameters: { method: 'POST', authentication: 'genericCredentialType', genericAuthType: 'httpHeaderAuth',
+        sendBody: true, specifyBody: 'json', jsonBody: '={{ JSON.stringify($json.cuerpo) }}' },
+      credentials: CRED.kommo }),
+    codigoTexto('a1f0c0de-0032-4000-8000-000000000032', 'Registro Explee-Kommo', [2340, 1000], F4['Registro Explee-Kommo']),
+    http('a1f0c0de-0033-4000-8000-000000000033', 'Registrar en Supabase', [2500, 1000], {
+      parameters: { method: 'POST', url: `${SUPABASE}/rest/v1/explee_kommo`, authentication: 'genericCredentialType', genericAuthType: 'httpHeaderAuth',
+        sendHeaders: true, headerParameters: { parameters: [{ name: 'Prefer', value: 'resolution=merge-duplicates,return=minimal' }] },
+        sendBody: true, specifyBody: 'json', jsonBody: '={{ JSON.stringify($json.filas) }}' },
+      credentials: CRED.supabase }),
+
     guardar('a1f0c0de-0006-4000-8000-000000000006', [1100, 300]),
   ],
   connections: {
@@ -108,7 +138,10 @@ const f12 = {
     'Trabajos TRM': a('Consultar TRM'), 'Consultar TRM': a('Filas TRM'), 'Filas TRM': a('Guardar en Supabase'),
     'Trabajos Brevo': a('Consultar Brevo'), 'Consultar Brevo': a('Filas Brevo'), 'Filas Brevo': a('Guardar en Supabase'),
     'Trabajos Explee': a('Campañas Explee'), 'Campañas Explee': a('Pedidos Explee'), 'Pedidos Explee': a('Consultar Explee'),
-    'Consultar Explee': a('Filas Explee'), 'Filas Explee': a('Guardar en Supabase'),
+    'Consultar Explee': a('Filas Explee'), 'Filas Explee': varios('Guardar en Supabase', 'Ya en Kommo'),
+    'Ya en Kommo': a('Nuevos para Kommo'), 'Nuevos para Kommo': a('Buscar correo en Kommo'), 'Buscar correo en Kommo': a('Buscar teléfono en Kommo'),
+    'Buscar teléfono en Kommo': a('Armar oportunidades'), 'Armar oportunidades': a('Crear en Kommo'), 'Crear en Kommo': a('Nota de cada uno'),
+    'Nota de cada uno': a('Nota en Kommo'), 'Nota en Kommo': a('Registro Explee-Kommo'), 'Registro Explee-Kommo': a('Registrar en Supabase'),
     'Trabajos Kommo': a('Consultar Kommo'), 'Consultar Kommo': a('Filas Kommo'), 'Filas Kommo': a('Guardar en Supabase'),
   },
   settings: { executionOrder: 'v1', timezone: 'America/Bogota', saveDataSuccessExecution: 'none' },
