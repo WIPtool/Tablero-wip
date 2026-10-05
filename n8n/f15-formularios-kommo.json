@@ -1,0 +1,314 @@
+{
+  "name": "F15 · Formularios del sitio → Kommo (lo llama /api/contact)",
+  "nodes": [
+    {
+      "id": "c3f0c0de-0001-4000-8000-000000000001",
+      "name": "Recibir formulario",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        0,
+        0
+      ],
+      "webhookId": "c3f0c0de-0001-4000-8000-0000000c0de1",
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "leads-sitio-4f9b2c7e1a8d43e6b0d5",
+        "responseMode": "onReceived",
+        "options": {}
+      }
+    },
+    {
+      "id": "c3f0c0de-0002-4000-8000-000000000002",
+      "name": "Lead del formulario",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        240,
+        0
+      ],
+      "parameters": {
+        "jsCode": "// Llega de /api/contact del sitio (portada, equipos y /contacto) después de enviar el correo.\nconst BASE = 'https://wiptool.kommo.com/api/v4';\nconst ORIGEN = { instagram: 340194, ig: 340194, facebook: 340196, fb: 340196, meta_ads: 340198, explee: 340200, email: 340202, brevo: 340202,\n  sendinblue: 340202, sitio_web: 340204, google: 340206, linkedin: 340208 };\nconst LIBRES = /^(gmail|hotmail|outlook|live|yahoo|icloud|msn|aol|protonmail)\\./i;\nconst digitos = (t) => String(t || '').replace(/\\D/g, '').slice(-10);\nconst buscar = (q) => `${BASE}/contacts?with=leads&query=${encodeURIComponent(q)}`;\nreturn $input.all().map((i) => i.json.body || i.json).filter((d) => d && d.email).map((d) => {\n  const correo = String(d.email).trim().toLowerCase();\n  const dom = correo.split('@')[1] || '';\n  const origen = String(d.origen || d.utm_source || '').toLowerCase();\n  const utm = ['utm_source', 'utm_medium', 'utm_campaign', 'utm_content'].filter((k) => d[k]).map((k) => `${k}=${d[k]}`).join(' · ');\n  const nota = [\n    'Formulario de contacto del sitio',\n    d.pagina ? `Página: ${d.pagina}` : '',\n    `Empresa: ${d.empresa || '—'}`,\n    d.telefono ? `Teléfono: ${d.telefono}` : '',\n    d.servicios ? `Servicios mensuales: ${d.servicios}` : '',\n    d.necesidad ? `Necesidad: ${d.necesidad}` : '',\n    `Origen de la visita: ${origen || 'sitio web'}${utm ? ' (' + utm + ')' : ''}`,\n  ].filter(Boolean).join('\\n');\n  return { json: {\n    clave: `formulario|${correo}|${Date.now()}`, nombre: d.nombre || '', correo, telefono: d.telefono || '', empresa: d.empresa || '',\n    dominio: LIBRES.test(dom) ? '' : dom, cargo: '', origen: ORIGEN[origen] || ORIGEN.sitio_web, campana: d.utm_campaign || 'Formulario de contacto',\n    objetivo: 'nuevo', etiqueta: 'Formulario web', nota,\n    url_correo: buscar(correo), url_telefono: buscar(digitos(d.telefono) || correo),\n  } };\n});\n"
+      }
+    },
+    {
+      "id": "c3f0c0de-0101-4000-8000-000000000001",
+      "name": "Buscar correo en Kommo",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        480,
+        0
+      ],
+      "parameters": {
+        "method": "GET",
+        "url": "={{ $json.url_correo }}",
+        "options": {
+          "batching": {
+            "batch": {
+              "batchSize": 1,
+              "batchInterval": 300
+            }
+          }
+        },
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth"
+      },
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "wxfP9VZK9UBkShIS",
+          "name": "Kommo (lectura)"
+        }
+      }
+    },
+    {
+      "id": "c3f0c0de-0102-4000-8000-000000000002",
+      "name": "Buscar teléfono en Kommo",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        640,
+        0
+      ],
+      "parameters": {
+        "method": "GET",
+        "url": "={{ $('Lead del formulario').all()[$itemIndex].json.url_telefono }}",
+        "options": {
+          "batching": {
+            "batch": {
+              "batchSize": 1,
+              "batchInterval": 300
+            }
+          }
+        },
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth"
+      },
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "wxfP9VZK9UBkShIS",
+          "name": "Kommo (lectura)"
+        }
+      }
+    },
+    {
+      "id": "c3f0c0de-0103-4000-8000-000000000003",
+      "name": "Etapas Kommo",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        800,
+        0
+      ],
+      "parameters": {
+        "method": "GET",
+        "url": "https://tlpnkcroqenudzgiqzum.supabase.co/rest/v1/kommo_lead?select=lead_id,etapa_id",
+        "options": {
+          "batching": {
+            "batch": {
+              "batchSize": 1,
+              "batchInterval": 300
+            }
+          }
+        },
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth"
+      },
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "us3OmK2VUvuuu7t8",
+          "name": "Supabase (tablero)"
+        }
+      },
+      "executeOnce": true,
+      "alwaysOutputData": true
+    },
+    {
+      "id": "c3f0c0de-0104-4000-8000-000000000004",
+      "name": "Armar en Kommo",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        960,
+        0
+      ],
+      "parameters": {
+        "jsCode": "const BASE = 'https://wiptool.kommo.com/api/v4';\nconst EMBUDO = 14551307, CAMPO_ORIGEN = 421634, CAMPO_CAMPANA = 421636;\nconst ETAPA = { nuevo: 112413251, reunion: 112413255 };\nconst TEMPRANAS = new Set([112413247, 112413251]); // Leads entrantes y Nuevo\nconst CERRADAS = new Set([142, 143]);\nconst normal = $('Lead del formulario').all();\nconst porCorreo = $('Buscar correo en Kommo').all();\nconst porTelefono = $('Buscar teléfono en Kommo').all();\n// Etapa de cada oportunidad según la última carga del tablero (las creadas en la última hora aún no están: cuentan como tempranas).\nconst etapaDe = new Map($input.all().map((i) => [Number(i.json.lead_id), Number(i.json.etapa_id)]).filter(([id]) => id));\nconst cuerpo = (r) => {\n  const j = (r && r.json) || {};\n  if (typeof j.data !== 'string') return j;\n  try { return JSON.parse(j.data); } catch (e) { return {}; }\n};\nconst contactos = (r) => (cuerpo(r)._embedded || {}).contacts || [];\nconst campo = (code, value, enumCode) => ({ field_code: code, values: [enumCode ? { value, enum_code: enumCode } : { value }] });\n\nreturn normal.map((n, i) => {\n  const f = n.json;\n  const base = { clave: f.clave, datos: f };\n  const contacto = [...contactos(porCorreo[i]), ...contactos(porTelefono[i])][0];\n  if (contacto) {\n    const abiertas = ((contacto._embedded && contacto._embedded.leads) || []).map((l) => l.id)\n      .filter((id) => !CERRADAS.has(etapaDe.get(id))).sort((a, b) => b - a);\n    if (abiertas[0]) {\n      const id = abiertas[0], etapa = etapaDe.get(id);\n      const mover = f.objetivo === 'reunion' && (etapa === undefined || TEMPRANAS.has(etapa));\n      return { json: { ...base, accion: mover ? 'movida' : 'existente', contacto_id: contacto.id, kommo_lead_id: id, metodo: 'PATCH', url: `${BASE}/leads`,\n        cuerpo: [{ id, tags_to_add: [{ name: f.etiqueta }], ...(mover ? { pipeline_id: EMBUDO, status_id: ETAPA.reunion } : {}) }] } };\n    }\n  }\n  const lead = {\n    name: f.empresa || f.nombre || f.correo, pipeline_id: EMBUDO, status_id: ETAPA[f.objetivo] || ETAPA.nuevo,\n    custom_fields_values: [\n      { field_id: CAMPO_ORIGEN, values: [{ enum_id: f.origen }] },\n      ...(f.campana ? [{ field_id: CAMPO_CAMPANA, values: [{ value: f.campana }] }] : []),\n    ],\n    _embedded: { tags: [{ name: f.etiqueta }] },\n  };\n  if (f.fecha) lead.created_at = Math.floor(new Date(f.fecha + 'T12:00:00-05:00').getTime() / 1000);\n  if (contacto) {\n    lead._embedded.contacts = [{ id: contacto.id }];\n  } else {\n    lead._embedded.contacts = [{ name: f.nombre || f.correo, custom_fields_values: [\n      ...(f.correo ? [campo('EMAIL', f.correo, 'WORK')] : []),\n      ...(f.telefono ? [campo('PHONE', f.telefono, 'WORK')] : []),\n      ...(f.cargo ? [campo('POSITION', f.cargo)] : []),\n    ] }];\n    if (f.empresa) lead._embedded.companies = [{ name: f.empresa, custom_fields_values: f.dominio ? [campo('WEB', f.dominio)] : [] }];\n  }\n  return { json: { ...base, accion: 'creado', contacto_id: contacto ? contacto.id : null, metodo: 'POST', url: `${BASE}/leads/complex`, cuerpo: [lead] } };\n});\n"
+      }
+    },
+    {
+      "id": "c3f0c0de-0105-4000-8000-000000000005",
+      "name": "Crear en Kommo",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1120,
+        0
+      ],
+      "parameters": {
+        "method": "={{ $json.metodo }}",
+        "url": "={{ $json.url }}",
+        "options": {
+          "batching": {
+            "batch": {
+              "batchSize": 1,
+              "batchInterval": 300
+            }
+          }
+        },
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify($json.cuerpo) }}"
+      },
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "wxfP9VZK9UBkShIS",
+          "name": "Kommo (lectura)"
+        }
+      }
+    },
+    {
+      "id": "c3f0c0de-0106-4000-8000-000000000006",
+      "name": "Nota en Kommo (armar)",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1280,
+        0
+      ],
+      "parameters": {
+        "jsCode": "// Saca el id de la oportunidad (la creada o la que ya existía) y arma la nota.\nconst BASE = 'https://wiptool.kommo.com/api/v4';\nconst armados = $('Armar en Kommo').all();\nconst respuestas = $input.all();\nconst cuerpo = (r) => {\n  const j = (r && r.json) || {};\n  if (typeof j.data !== 'string') return j;\n  try { return JSON.parse(j.data); } catch (e) { return {}; }\n};\nreturn armados.map((a, i) => {\n  const x = a.json;\n  let leadId = x.kommo_lead_id, contactoId = x.contacto_id;\n  if (x.accion === 'creado') {\n    const c = cuerpo(respuestas[i]);\n    const r = Array.isArray(c) ? c[0] || {} : c;\n    if (!r.id) throw new Error('Kommo no devolvió la oportunidad creada para ' + x.clave + ': ' + JSON.stringify(c).slice(0, 300));\n    leadId = r.id; contactoId = r.contact_id || contactoId;\n  }\n  const extra = { existente: '(la persona ya estaba en Kommo)', movida: '(ya estaba en Kommo: pasó a Reunión agendada)' }[x.accion];\n  return { json: {\n    url: `${BASE}/leads/notes`, cuerpo: [{ entity_id: leadId, note_type: 'common', params: { text: x.datos.nota + (extra ? '\\n' + extra : '') } }],\n    fila: { clave: x.clave, kommo_lead_id: leadId, kommo_contacto_id: contactoId, accion: x.accion },\n  } };\n});\n"
+      }
+    },
+    {
+      "id": "c3f0c0de-0107-4000-8000-000000000007",
+      "name": "Nota en Kommo",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1440,
+        0
+      ],
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $json.url }}",
+        "options": {
+          "batching": {
+            "batch": {
+              "batchSize": 1,
+              "batchInterval": 300
+            }
+          }
+        },
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify($json.cuerpo) }}"
+      },
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "wxfP9VZK9UBkShIS",
+          "name": "Kommo (lectura)"
+        }
+      }
+    }
+  ],
+  "connections": {
+    "Recibir formulario": {
+      "main": [
+        [
+          {
+            "node": "Lead del formulario",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Buscar correo en Kommo": {
+      "main": [
+        [
+          {
+            "node": "Buscar teléfono en Kommo",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Buscar teléfono en Kommo": {
+      "main": [
+        [
+          {
+            "node": "Etapas Kommo",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Etapas Kommo": {
+      "main": [
+        [
+          {
+            "node": "Armar en Kommo",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Armar en Kommo": {
+      "main": [
+        [
+          {
+            "node": "Crear en Kommo",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Crear en Kommo": {
+      "main": [
+        [
+          {
+            "node": "Nota en Kommo (armar)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Nota en Kommo (armar)": {
+      "main": [
+        [
+          {
+            "node": "Nota en Kommo",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Lead del formulario": {
+      "main": [
+        [
+          {
+            "node": "Buscar correo en Kommo",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "timezone": "America/Bogota"
+  },
+  "pinData": {}
+}

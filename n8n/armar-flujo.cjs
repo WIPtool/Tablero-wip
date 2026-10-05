@@ -1,7 +1,9 @@
 // Arma los flujos de n8n a partir de los archivos .js de esta carpeta:
 //  - f12-carga-tablero.json: cada hora carga Google (Analytics y Search Console), Meta Ads, la TRM, Brevo, Explee y Kommo a Supabase,
 //    y pasa a Kommo los leads calientes nuevos de Explee (F4, explee-kommo.js).
+//    Si se define CRED_CALENDLY=<id de la credencial>, también pasa a Kommo las citas nuevas de Calendly (F2, sitio-calendly.js).
 //  - f14-google-ads.json:    recibe lo que envía el script de Google Ads y lo guarda en Supabase.
+//  - f15-formularios-kommo.json: recibe los formularios del sitio (/api/contact) y los crea en Kommo con su Origen (F1).
 // Uso: node n8n/armar-flujo.cjs
 // Las credenciales se referencian por id (se crean a mano en n8n; las claves nunca van en este repositorio).
 const fs = require('fs');
@@ -17,6 +19,10 @@ const CRED = {
   explee: { httpHeaderAuth: { id: '1K5Hj4X9btSUKWco', name: 'Explee' } },
   kommo: { httpHeaderAuth: { id: 'wxfP9VZK9UBkShIS', name: 'Kommo (lectura)' } },
 };
+// Calendly (lectura): token personal en una credencial Header Auth (Authorization: Bearer …); se crea a mano en n8n.
+const CRED_CALENDLY = process.env.CRED_CALENDLY ? { httpHeaderAuth: { id: process.env.CRED_CALENDLY, name: 'Calendly (lectura)' } } : null;
+// Ruta del webhook que llama /api/contact del sitio (debe coincidir con N8N_LEADS_URL de api/contact.js en landing-wip).
+const RUTA_LEADS = 'leads-sitio-4f9b2c7e1a8d43e6b0d5';
 // Ruta del webhook que llama el script de Google Ads (difícil de adivinar; no da acceso a nada, solo recibe cifras).
 const RUTA_GADS = 'gads-7c1e4b9a2f6d48e3a51c';
 
@@ -43,6 +49,8 @@ const partes = (archivo) => Object.fromEntries(leer(archivo).split(/^\/\/ == /m)
 const EXPLEE = partes('explee.js');
 const KOMMO = partes('kommo.js');
 const F4 = partes('explee-kommo.js');
+const COMUN = partes('kommo-crear.js');
+const SITIO = partes('sitio-calendly.js');
 const codigoTexto = (id, name, posicion, js) => ({ id, name, type: 'n8n-nodes-base.code', typeVersion: 2, position: posicion, parameters: { jsCode: js } });
 const http = (id, name, posicion, extra) => ({
   id, name, type: 'n8n-nodes-base.httpRequest', typeVersion: 4.2, position: posicion,
@@ -52,7 +60,69 @@ const http = (id, name, posicion, extra) => ({
 const a = (nodo) => ({ main: [[{ node: nodo, type: 'main', index: 0 }]] });
 const varios = (...nodos) => ({ main: [nodos.map((node) => ({ node, type: 'main', index: 0 }))] });
 
+// Cadena común para crear o actualizar en Kommo (kommo-crear.js), después del nodo que normaliza los datos.
+// sufijo distingue los nombres cuando hay varias cadenas en el mismo flujo; ids: prefijo + número.
+const cadenaKommo = (normal, sufijo, prefijo, x0, y) => {
+  const n = (s) => s + sufijo;
+  const id = (k) => `${prefijo}${String(k).padStart(2, '0')}-4000-8000-${String(k).padStart(12, '0')}`;
+  const reemplazar = (js) => js.split('__NORMAL__').join(normal).split('__CORREO__').join(n('Buscar correo en Kommo'))
+    .split('__TELEFONO__').join(n('Buscar teléfono en Kommo')).split('__ARMAR__').join(n('Armar en Kommo'));
+  const auth = { authentication: 'genericCredentialType', genericAuthType: 'httpHeaderAuth' };
+  const nodos = [
+    http(id(1), n('Buscar correo en Kommo'), [x0, y], { parameters: { url: '={{ $json.url_correo }}', ...auth }, credentials: CRED.kommo }),
+    http(id(2), n('Buscar teléfono en Kommo'), [x0 + 160, y], {
+      parameters: { url: `={{ $('${normal}').all()[$itemIndex].json.url_telefono }}`, ...auth }, credentials: CRED.kommo }),
+    { ...http(id(3), n('Etapas Kommo'), [x0 + 320, y], {
+      parameters: { url: `${SUPABASE}/rest/v1/kommo_lead?select=lead_id,etapa_id`, ...auth }, credentials: CRED.supabase }), executeOnce: true, alwaysOutputData: true },
+    codigoTexto(id(4), n('Armar en Kommo'), [x0 + 480, y], reemplazar(COMUN['Armar en Kommo'])),
+    http(id(5), n('Crear en Kommo'), [x0 + 640, y], {
+      parameters: { method: '={{ $json.metodo }}', ...auth, sendBody: true, specifyBody: 'json', jsonBody: '={{ JSON.stringify($json.cuerpo) }}' },
+      credentials: CRED.kommo }),
+    codigoTexto(id(6), n('Nota en Kommo (armar)'), [x0 + 800, y], reemplazar(COMUN['Nota en Kommo'])),
+    http(id(7), n('Nota en Kommo'), [x0 + 960, y], {
+      parameters: { method: 'POST', ...auth, sendBody: true, specifyBody: 'json', jsonBody: '={{ JSON.stringify($json.cuerpo) }}' },
+      credentials: CRED.kommo }),
+  ];
+  const nombres = nodos.map((x) => x.name);
+  const conexiones = Object.fromEntries(nombres.slice(0, -1).map((nm, i) => [nm, a(nombres[i + 1])]));
+  conexiones[normal] = a(nombres[0]);
+  return { nodos, conexiones, ultimo: nombres[nombres.length - 1] };
+};
+
 const INICIOS = ['Trabajos Google', 'Trabajos Meta', 'Trabajos TRM', 'Trabajos Brevo', 'Trabajos Explee', 'Trabajos Kommo'];
+// F2 · Calendly → Kommo (se conecta antes de "Trabajos Kommo", para que la carga del tablero de esa hora ya vea las citas)
+const F2 = (() => {
+  if (!CRED_CALENDLY) return { nodos: [], conexiones: {}, inicio: [] };
+  const id = (k) => `a1f0c0de-01${String(k).padStart(2, '0')}-4000-8000-0000000001${String(k).padStart(2, '0')}`;
+  const auth = { authentication: 'genericCredentialType', genericAuthType: 'httpHeaderAuth' };
+  const cadena = cadenaKommo('Lead de la cita (Calendly)', ' (Calendly)', 'a1f0c0de-02', 1700, 1300);
+  const nodos = [
+    codigoTexto(id(1), 'Trabajos Calendly', [260, 1300], "return [{ json: { url: 'https://api.calendly.com/users/me' } }];\n"),
+    http(id(2), 'Usuario Calendly', [420, 1300], { parameters: auth, credentials: CRED_CALENDLY }),
+    codigoTexto(id(3), 'Pedidos Calendly', [580, 1300], SITIO['Pedidos Calendly']),
+    http(id(4), 'Citas Calendly', [740, 1300], { parameters: auth, credentials: CRED_CALENDLY }),
+    { ...http(id(5), 'Ya agendadas (Calendly)', [900, 1300], {
+      parameters: { url: `${SUPABASE}/rest/v1/calendly_kommo?select=evento`, ...auth }, credentials: CRED.supabase }), executeOnce: true, alwaysOutputData: true },
+    codigoTexto(id(6), 'Citas nuevas (Calendly)', [1060, 1300], SITIO['Citas nuevas']),
+    http(id(7), 'Invitados Calendly', [1220, 1300], { parameters: auth, credentials: CRED_CALENDLY }),
+    codigoTexto(id(8), 'Lead de la cita (Calendly)', [1380, 1300], SITIO['Lead de la cita']),
+    ...cadena.nodos,
+    codigoTexto(id(9), 'Registro Calendly-Kommo', [2820, 1300], SITIO['Registro Calendly-Kommo']),
+    http(id(10), 'Registrar en Supabase (Calendly)', [2980, 1300], {
+      parameters: { method: 'POST', url: `${SUPABASE}/rest/v1/calendly_kommo`, ...auth,
+        sendHeaders: true, headerParameters: { parameters: [{ name: 'Prefer', value: 'resolution=merge-duplicates,return=minimal' }] },
+        sendBody: true, specifyBody: 'json', jsonBody: '={{ JSON.stringify($json.filas) }}' },
+      credentials: CRED.supabase }),
+  ];
+  const conexiones = {
+    'Trabajos Calendly': a('Usuario Calendly'), 'Usuario Calendly': a('Pedidos Calendly'), 'Pedidos Calendly': a('Citas Calendly'),
+    'Citas Calendly': a('Ya agendadas (Calendly)'), 'Ya agendadas (Calendly)': a('Citas nuevas (Calendly)'),
+    'Citas nuevas (Calendly)': a('Invitados Calendly'), 'Invitados Calendly': a('Lead de la cita (Calendly)'),
+    ...cadena.conexiones, [cadena.ultimo]: a('Registro Calendly-Kommo'), 'Registro Calendly-Kommo': a('Registrar en Supabase (Calendly)'),
+  };
+  return { nodos, conexiones, inicio: ['Trabajos Calendly'] };
+})();
+const ARRANQUE = [...INICIOS.slice(0, -1), ...F2.inicio, INICIOS[INICIOS.length - 1]];
 const f12 = {
   name: 'F12 · Carga del tablero (Google, Meta y TRM → Supabase)',
   nodes: [
@@ -129,10 +199,12 @@ const f12 = {
       credentials: CRED.supabase }),
 
     guardar('a1f0c0de-0006-4000-8000-000000000006', [1100, 300]),
+    ...F2.nodos,
   ],
   connections: {
-    'Cada hora': varios(...INICIOS),
-    'Cargar histórico (a mano)': varios(...INICIOS),
+    'Cada hora': varios(...ARRANQUE),
+    'Cargar histórico (a mano)': varios(...ARRANQUE),
+    ...F2.conexiones,
     'Trabajos Google': a('Consultar Google'), 'Consultar Google': a('Filas Google'), 'Filas Google': a('Guardar en Supabase'),
     'Trabajos Meta': a('Consultar Meta'), 'Consultar Meta': a('Filas Meta'), 'Filas Meta': a('Guardar en Supabase'),
     'Trabajos TRM': a('Consultar TRM'), 'Consultar TRM': a('Filas TRM'), 'Filas TRM': a('Guardar en Supabase'),
@@ -162,6 +234,23 @@ const f14 = {
   pinData: {},
 };
 
+// F1 · Formularios del sitio → Kommo
+const F1 = cadenaKommo('Lead del formulario', '', 'c3f0c0de-01', 480, 0);
+const f15 = {
+  name: 'F15 · Formularios del sitio → Kommo (lo llama /api/contact)',
+  nodes: [
+    { id: 'c3f0c0de-0001-4000-8000-000000000001', name: 'Recibir formulario', type: 'n8n-nodes-base.webhook', typeVersion: 2,
+      position: [0, 0], webhookId: 'c3f0c0de-0001-4000-8000-0000000c0de1',
+      parameters: { httpMethod: 'POST', path: RUTA_LEADS, responseMode: 'onReceived', options: {} } },
+    codigoTexto('c3f0c0de-0002-4000-8000-000000000002', 'Lead del formulario', [240, 0], SITIO['Lead del formulario']),
+    ...F1.nodos,
+  ],
+  connections: { 'Recibir formulario': a('Lead del formulario'), ...F1.conexiones },
+  settings: { executionOrder: 'v1', timezone: 'America/Bogota' },
+  pinData: {},
+};
+
 fs.writeFileSync(path.join(__dirname, 'f12-carga-tablero.json'), JSON.stringify(f12, null, 2));
+fs.writeFileSync(path.join(__dirname, 'f15-formularios-kommo.json'), JSON.stringify(f15, null, 2));
 fs.writeFileSync(path.join(__dirname, 'f14-google-ads.json'), JSON.stringify(f14, null, 2));
 console.log('ok · webhook de Google Ads: https://wiptool.app.n8n.cloud/webhook/' + RUTA_GADS);
