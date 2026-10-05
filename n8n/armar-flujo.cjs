@@ -4,7 +4,7 @@
 //    Si se define CRED_CALENDLY=<id de la credencial>, también pasa a Kommo las citas nuevas de Calendly (F2, sitio-calendly.js).
 //  - f14-google-ads.json:    recibe lo que envía el script de Google Ads y lo guarda en Supabase.
 //  - f15-formularios-kommo.json: recibe los formularios del sitio (/api/contact) y los crea en Kommo con su Origen (F1).
-// Uso: node n8n/armar-flujo.cjs
+// Uso: CRED_CALENDLY=0U9bkwTaH0qwcc9h node n8n/armar-flujo.cjs  (id de la credencial "Calendly (lectura)" en n8n)
 // Las credenciales se referencian por id (se crean a mano en n8n; las claves nunca van en este repositorio).
 const fs = require('fs');
 const path = require('path');
