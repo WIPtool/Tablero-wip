@@ -13,10 +13,10 @@ const b = $input.first().json.body || {};
 const m =(b.message && b.message.add && b.message.add[0]) || {
   text: b['message[add][0][text]'], element_id: b['message[add][0][element_id]'], element_type: b['message[add][0][element_type]'],
   entity_id: b['message[add][0][entity_id]'], entity_type: b['message[add][0][entity_type]'], talk_id: b['message[add][0][talk_id]'],
-  id: b['message[add][0][id]'], created_at: b['message[add][0][created_at]'], type: b['message[add][0][message_type]'] || b['message[add][0][type]'],
+  id: b['message[add][0][id]'], created_at: b['message[add][0][created_at]'], type: b['message[add][0][type]'], // incoming / outgoing (message_type es el contenido: text, picture…)
   attachment: { type: b['message[add][0][attachment][type]'] },
 };
-if ((m.message_type || m.type) && (m.message_type || m.type) !== 'incoming') return [];
+if (m.type && m.type !== 'incoming') return [];
 // La oportunidad: element_id cuando element_type es 2 (lead); si no, entity_id cuando entity_type es "lead".
 const lead = Number(String(m.element_type) === '2' ? m.element_id : (String(m.entity_type) === 'lead' ? m.entity_id : m.element_id));
 if (!lead) return [];
