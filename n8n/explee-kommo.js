@@ -2,15 +2,14 @@
 // Cada hora, después de leer Explee: los leads calientes que aún no pasaron a Kommo se crean como oportunidad en "Nuevo"
 // (Origen = Explee, Campaña = la de Explee, con contacto, empresa y una nota con lo que respondió la persona).
 // Si la persona ya está en Kommo (mismo correo o teléfono) no se duplica: solo se le deja la nota en su última oportunidad.
-// La tabla explee_kommo de Supabase guarda qué leads de Explee ya pasaron.
+// La tabla explee_kommo de Supabase guarda qué leads de Explee ya pasaron; la vista explee_pendientes_kommo da los que faltan.
 
 // == Nuevos para Kommo (Code, una vez para todos los elementos)
 const LIMITE = 0; // 0 = todos; para una prueba se pone un número
 const BASE = 'https://wiptool.kommo.com/api/v4';
-const hechos = new Set($input.all().map((i) => i.json.lead_id).filter(Boolean));
-const carga = $('Filas Explee').all().find((i) => i.json.p_tabla === 'explee_lead');
 const digitos = (t) => String(t || '').replace(/\D/g, '').slice(-10);
-let nuevos = ((carga && carga.json.p_filas) || []).filter((f) => !hechos.has(f.lead_id) && (f.correo || digitos(f.telefono)));
+// "Pendientes para Kommo" devuelve una fila por lead pendiente (o un elemento vacío si no hay ninguno).
+let nuevos = $input.all().map((i) => i.json).filter((f) => f.lead_id && (f.correo || digitos(f.telefono)));
 if (LIMITE) nuevos = nuevos.slice(0, LIMITE);
 const buscar = (q) => `${BASE}/contacts?with=leads&query=${encodeURIComponent(q)}`;
 return nuevos.map((f) => ({ json: { ...f,

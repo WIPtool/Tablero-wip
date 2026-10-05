@@ -264,7 +264,7 @@
         900
       ],
       "parameters": {
-        "jsCode": "return [{ json: { url: 'https://api.explee.com/public/api/v1/autogtm/campaigns' } }];\n"
+        "jsCode": "const manual = !$input.first().json.timestamp;\nreturn [{ json: { url: 'https://api.explee.com/public/api/v1/autogtm/campaigns', manual } }];\n"
       }
     },
     {
@@ -307,7 +307,7 @@
         900
       ],
       "parameters": {
-        "jsCode": "// Con la lista de campañas arma los pedidos: la analítica de hoy de cada campaña y las páginas de leads calientes.\nconst BASE = 'https://api.explee.com/public/api/v1/autogtm';\nconst campanas = $input.first().json.campaigns || [];\nreturn [\n  ...campanas.map((c) => ({ json: { tipo: 'analitica', campana_id: String(c.id), campana: c.name || '',\n    url: `${BASE}/campaigns/${c.id}/analytics?period=today` } })),\n  ...[0, 100, 200, 300, 400].map((offset) => ({ json: { tipo: 'leads', url: `${BASE}/hot-leads?limit=100&offset=${offset}` } })),\n];\n"
+        "jsCode": "// Con la lista de campañas arma los pedidos: el total acumulado de cada campaña y los leads calientes recientes.\nconst BASE = 'https://api.explee.com/public/api/v1/autogtm';\nconst campanas = $input.first().json.campaigns || [];\nconst manual = $('Trabajos Explee').first().json.manual;\nconst desde = manual ? '2020-01-01T00:00:00Z' : new Date(Date.now() - 3 * 86400000).toISOString();\nreturn [\n  ...campanas.map((c) => ({ json: { tipo: 'analitica', campana_id: String(c.id), campana: c.name || '',\n    url: `${BASE}/campaigns/${c.id}/analytics?period=all` } })),\n  { json: { tipo: 'leads', url: `${BASE}/hot-leads?limit=500&since=${encodeURIComponent(desde)}` } },\n];\n"
       }
     },
     {
@@ -350,7 +350,7 @@
         900
       ],
       "parameters": {
-        "jsCode": "// Junta las respuestas: una fila por campaña con lo de hoy, y la lista completa de leads calientes.\nconst hoy = new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Bogota' }).format(new Date());\nconst dia = new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Bogota' });\nconst pedidos = $('Pedidos Explee').all();\nconst respuestas = $input.all();\nconst num = (v) => (v == null || v === '' ? 0 : Number(v) || 0);\n\n// Deja solo lo que escribió la persona: corta el correo citado (\"El ... escribió:\", \"On ... wrote:\", líneas con \">\").\nconst propio = (texto) => {\n  const lineas = String(texto || '').split(/\\r?\\n/);\n  const fin = lineas.findIndex((l) => /^\\s*>/.test(l) || /^\\s*(El|On)\\s.+(escribió|wrote):?\\s*$/i.test(l) || /^\\s*(El|On)\\s.+\\d{4}/.test(l));\n  const t = (fin >= 0 ? lineas.slice(0, fin) : lineas).join(' ').replace(/\\s+/g, ' ').trim();\n  return t.length > 500 ? t.slice(0, 497) + '...' : t;\n};\n\nconst nombres = {};\nconst diario = [];\nconst leads = new Map();\nrespuestas.forEach((r, i) => {\n  const p = pedidos[i].json;\n  if (p.tipo === 'analitica') {\n    nombres[p.campana_id] = p.campana;\n    const a = r.json;\n    diario.push({ fecha: hoy, campana_id: p.campana_id, campana: p.campana, enviados: num(a.emails_sent), respuestas: num(a.total_replies),\n      leads: num(a.hot_leads), gasto_usd: num(a.spend_usd) });\n  } else {\n    for (const l of r.json.leads || []) leads.set(String(l.id ?? `${l.email}|${l.company_domain}`), l);\n  }\n});\n\nconst filasLeads = [...leads.entries()].map(([id, l]) => ({\n  fecha: l.became_hot_at ? dia.format(new Date(l.became_hot_at)) : null, lead_id: id,\n  campana: nombres[l.campaign_id] || String(l.campaign_id || ''), empresa: l.company_name || '', dominio: l.company_domain || '',\n  cargo: l.job_title || '', pais: l.country || '', motivo: propio(l.why_hot), nombre: l.name || '', correo: l.email || '',\n  linkedin: l.linkedin_url || '', telefono: l.phone || '', nota: l.note || '',\n}));\n\nreturn [\n  { json: { p_tabla: 'explee_campana_diario', p_desde: hoy, p_hasta: hoy, p_filas: diario, p_fuente: 'explee', p_sitio: null } },\n  { json: { p_tabla: 'explee_lead', p_desde: hoy, p_hasta: hoy, p_filas: filasLeads, p_fuente: 'explee', p_sitio: null } },\n];\n"
+        "jsCode": "// Junta las respuestas: el total acumulado de cada campaña en este momento y los leads calientes.\nconst dia = new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Bogota' });\nconst ahora = new Date();\nconst hoy = dia.format(ahora);\nconst pedidos = $('Pedidos Explee').all();\nconst respuestas = $input.all();\nconst num = (v) => (v == null || v === '' ? 0 : Number(v) || 0);\n\n// Deja solo lo que escribió la persona: corta el correo citado (\"El ... escribió:\", \"On ... wrote:\", líneas con \">\").\nconst propio = (texto) => {\n  const lineas = String(texto || '').split(/\\r?\\n/);\n  const fin = lineas.findIndex((l) => /^\\s*>/.test(l) || /^\\s*(El|On)\\s.+(escribió|wrote):?\\s*$/i.test(l) || /^\\s*(El|On)\\s.+\\d{4}/.test(l));\n  const t = (fin >= 0 ? lineas.slice(0, fin) : lineas).join(' ').replace(/\\s+/g, ' ').trim();\n  return t.length > 500 ? t.slice(0, 497) + '...' : t;\n};\n\nconst nombres = {};\nconst acumulado = [];\nconst leads = new Map();\nrespuestas.forEach((r, i) => {\n  const p = pedidos[i].json;\n  if (p.tipo === 'analitica') {\n    nombres[p.campana_id] = p.campana;\n    const a = r.json;\n    if (a.emails_sent == null) throw new Error(`Explee no devolvió el total de la campaña ${p.campana}: ${JSON.stringify(a).slice(0, 200)}`);\n    acumulado.push({ fecha: hoy, momento: ahora.toISOString(), campana_id: p.campana_id, campana: p.campana,\n      enviados: num(a.emails_sent), respuestas: num(a.total_replies), leads: num(a.hot_leads), gasto_usd: num(a.spend_usd) });\n  } else {\n    const lista = r.json.leads || [];\n    if (lista.length >= 500) throw new Error('Explee devolvió 500 leads calientes o más: hay que paginar el pedido de leads en \"Pedidos Explee\"');\n    for (const l of lista) leads.set(`${l.email}|${l.company_domain}`, l);\n  }\n});\n\nconst filasLeads = [...leads.entries()].map(([id, l]) => ({\n  fecha: l.became_hot_at ? dia.format(new Date(l.became_hot_at)) : null, lead_id: id,\n  campana: nombres[l.campaign_id] || String(l.campaign_id || ''), empresa: l.company_name || '', dominio: l.company_domain || '',\n  cargo: l.job_title || '', pais: l.country || '', motivo: propio(l.why_hot), nombre: l.name || '', correo: l.email || '',\n  linkedin: l.linkedin_url || '', telefono: l.phone || '', nota: l.note || '',\n}));\n\nreturn [\n  { json: { p_tabla: 'explee_acumulado', p_desde: hoy, p_hasta: hoy, p_filas: acumulado, p_fuente: 'explee', p_sitio: null } },\n  { json: { p_tabla: 'explee_lead', p_desde: hoy, p_hasta: hoy, p_filas: filasLeads, p_fuente: null, p_sitio: null } },\n];\n"
       }
     },
     {
@@ -411,7 +411,7 @@
     },
     {
       "id": "a1f0c0de-0024-4000-8000-000000000024",
-      "name": "Ya en Kommo",
+      "name": "Pendientes para Kommo",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
       "position": [
@@ -420,7 +420,7 @@
       ],
       "parameters": {
         "method": "GET",
-        "url": "https://tlpnkcroqenudzgiqzum.supabase.co/rest/v1/explee_kommo?select=lead_id",
+        "url": "https://tlpnkcroqenudzgiqzum.supabase.co/rest/v1/explee_pendientes_kommo?select=*",
         "options": {
           "batching": {
             "batch": {
@@ -451,7 +451,7 @@
         1000
       ],
       "parameters": {
-        "jsCode": "const LIMITE = 0; // 0 = todos; para una prueba se pone un número\nconst BASE = 'https://wiptool.kommo.com/api/v4';\nconst hechos = new Set($input.all().map((i) => i.json.lead_id).filter(Boolean));\nconst carga = $('Filas Explee').all().find((i) => i.json.p_tabla === 'explee_lead');\nconst digitos = (t) => String(t || '').replace(/\\D/g, '').slice(-10);\nlet nuevos = ((carga && carga.json.p_filas) || []).filter((f) => !hechos.has(f.lead_id) && (f.correo || digitos(f.telefono)));\nif (LIMITE) nuevos = nuevos.slice(0, LIMITE);\nconst buscar = (q) => `${BASE}/contacts?with=leads&query=${encodeURIComponent(q)}`;\nreturn nuevos.map((f) => ({ json: { ...f,\n  url_correo: buscar(f.correo || digitos(f.telefono)),\n  url_telefono: buscar(digitos(f.telefono) || f.correo) } }));\n"
+        "jsCode": "const LIMITE = 0; // 0 = todos; para una prueba se pone un número\nconst BASE = 'https://wiptool.kommo.com/api/v4';\nconst digitos = (t) => String(t || '').replace(/\\D/g, '').slice(-10);\n// \"Pendientes para Kommo\" devuelve una fila por lead pendiente (o un elemento vacío si no hay ninguno).\nlet nuevos = $input.all().map((i) => i.json).filter((f) => f.lead_id && (f.correo || digitos(f.telefono)));\nif (LIMITE) nuevos = nuevos.slice(0, LIMITE);\nconst buscar = (q) => `${BASE}/contacts?with=leads&query=${encodeURIComponent(q)}`;\nreturn nuevos.map((f) => ({ json: { ...f,\n  url_correo: buscar(f.correo || digitos(f.telefono)),\n  url_telefono: buscar(digitos(f.telefono) || f.correo) } }));\n"
       }
     },
     {
@@ -953,14 +953,14 @@
             "index": 0
           },
           {
-            "node": "Ya en Kommo",
+            "node": "Pendientes para Kommo",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "Ya en Kommo": {
+    "Pendientes para Kommo": {
       "main": [
         [
           {

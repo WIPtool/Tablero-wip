@@ -101,8 +101,8 @@ const f12 = {
     codigoTexto('a1f0c0de-0023-4000-8000-000000000023', 'Filas Kommo', [740, 1100], KOMMO['Filas Kommo']),
 
     // F4 · Explee → Kommo (sale de "Filas Explee")
-    { ...http('a1f0c0de-0024-4000-8000-000000000024', 'Ya en Kommo', [1060, 1000], {
-      parameters: { url: `${SUPABASE}/rest/v1/explee_kommo?select=lead_id`, authentication: 'genericCredentialType', genericAuthType: 'httpHeaderAuth' },
+    { ...http('a1f0c0de-0024-4000-8000-000000000024', 'Pendientes para Kommo', [1060, 1000], {
+      parameters: { url: `${SUPABASE}/rest/v1/explee_pendientes_kommo?select=*`, authentication: 'genericCredentialType', genericAuthType: 'httpHeaderAuth' },
       credentials: CRED.supabase }), executeOnce: true, alwaysOutputData: true },
     codigoTexto('a1f0c0de-0025-4000-8000-000000000025', 'Nuevos para Kommo', [1220, 1000], F4['Nuevos para Kommo']),
     http('a1f0c0de-0026-4000-8000-000000000026', 'Buscar correo en Kommo', [1380, 1000], {
@@ -138,8 +138,8 @@ const f12 = {
     'Trabajos TRM': a('Consultar TRM'), 'Consultar TRM': a('Filas TRM'), 'Filas TRM': a('Guardar en Supabase'),
     'Trabajos Brevo': a('Consultar Brevo'), 'Consultar Brevo': a('Filas Brevo'), 'Filas Brevo': a('Guardar en Supabase'),
     'Trabajos Explee': a('Campañas Explee'), 'Campañas Explee': a('Pedidos Explee'), 'Pedidos Explee': a('Consultar Explee'),
-    'Consultar Explee': a('Filas Explee'), 'Filas Explee': varios('Guardar en Supabase', 'Ya en Kommo'),
-    'Ya en Kommo': a('Nuevos para Kommo'), 'Nuevos para Kommo': a('Buscar correo en Kommo'), 'Buscar correo en Kommo': a('Buscar teléfono en Kommo'),
+    'Consultar Explee': a('Filas Explee'), 'Filas Explee': varios('Guardar en Supabase', 'Pendientes para Kommo'),
+    'Pendientes para Kommo': a('Nuevos para Kommo'), 'Nuevos para Kommo': a('Buscar correo en Kommo'), 'Buscar correo en Kommo': a('Buscar teléfono en Kommo'),
     'Buscar teléfono en Kommo': a('Armar oportunidades'), 'Armar oportunidades': a('Crear en Kommo'), 'Crear en Kommo': a('Nota de cada uno'),
     'Nota de cada uno': a('Nota en Kommo'), 'Nota en Kommo': a('Registro Explee-Kommo'), 'Registro Explee-Kommo': a('Registrar en Supabase'),
     'Trabajos Kommo': a('Consultar Kommo'), 'Consultar Kommo': a('Filas Kommo'), 'Filas Kommo': a('Guardar en Supabase'),
