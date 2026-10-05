@@ -13,10 +13,10 @@ const b = $input.first().json.body || {};
 const m =(b.message && b.message.add && b.message.add[0]) || {
   text: b['message[add][0][text]'], element_id: b['message[add][0][element_id]'], element_type: b['message[add][0][element_type]'],
   entity_id: b['message[add][0][entity_id]'], entity_type: b['message[add][0][entity_type]'], talk_id: b['message[add][0][talk_id]'],
-  id: b['message[add][0][id]'], created_at: b['message[add][0][created_at]'], type: b['message[add][0][type]'],
+  id: b['message[add][0][id]'], created_at: b['message[add][0][created_at]'], type: b['message[add][0][message_type]'] || b['message[add][0][type]'],
   attachment: { type: b['message[add][0][attachment][type]'] },
 };
-if (m.type && m.type !== 'incoming') return [];
+if ((m.message_type || m.type) && (m.message_type || m.type) !== 'incoming') return [];
 // La oportunidad: element_id cuando element_type es 2 (lead); si no, entity_id cuando entity_type es "lead".
 const lead = Number(String(m.element_type) === '2' ? m.element_id : (String(m.entity_type) === 'lead' ? m.entity_id : m.element_id));
 if (!lead) return [];
@@ -62,7 +62,10 @@ const sistema = `__INSTRUCCIONES__
 # Contexto de esta conversación
 - Fecha y hora en Colombia: ${hoy}
 - La persona llegó por: ${origen || 'origen desconocido'}
-- Enlace para agendar la reunión (úsalo tal cual): ${agenda}`;
+- Enlace para agendar la reunión (úsalo tal cual): ${agenda}
+
+# Formato de salida
+Responde SIEMPRE llamando la herramienta responder, una sola vez, con el mensaje de WhatsApp en respuesta. No escribas texto fuera de la herramienta.`;
 const herramienta = {
   name: 'responder',
   description: 'Devuelve el próximo mensaje de WhatsApp para la persona y lo que aprendiste de ella.',
@@ -82,7 +85,7 @@ const herramienta = {
   },
 };
 return [{ json: { lead_id: lead.id, responsable: lead.responsible_user_id, nombre_lead: lead.name, origen,
-  pedido: { model: MODELO, max_tokens: 1024, system: sistema, messages: mensajes, tools: [herramienta], tool_choice: { type: 'tool', name: 'responder' } } } }];
+  pedido: { model: MODELO, max_tokens: 1024, system: sistema, messages: mensajes, tools: [herramienta], tool_choice: { type: 'auto' } } } }]; // este modelo no acepta forzar la herramienta: se pide en el system
 
 // == Respuesta de Claude (Code, una vez para todos los elementos)
 // Saca la respuesta y arma lo que se escribe en Kommo y en Supabase.
@@ -90,9 +93,11 @@ const CAMPO_RESPUESTA = __CAMPO_RESPUESTA__;
 const BOT_RESPUESTA = __BOT_RESPUESTA__;
 const ctx = $('Decidir y preguntar a Claude').first().json;
 const r = $input.first().json;
-const uso = (r.content || []).find((c) => c.type === 'tool_use');
-if (!uso || !uso.input || !uso.input.respuesta) throw new Error('Claude no devolvió una respuesta: ' + JSON.stringify(r).slice(0, 300));
-const x = uso.input;
+const uso = (r.content || []).find((c) => c.type === 'tool_use' && c.name === 'responder');
+// Si Claude respondió con texto en vez de la herramienta, se usa ese texto como mensaje.
+const textoLibre = (r.content || []).filter((c) => c.type === 'text').map((c) => c.text).join('\n').trim();
+const x = uso && uso.input && uso.input.respuesta ? uso.input : { respuesta: textoLibre, pasar_a_persona: false };
+if (!x.respuesta) throw new Error('Claude no devolvió una respuesta: ' + JSON.stringify(r).slice(0, 300));
 const texto = String(x.respuesta).replace(/\*\*?|__|^#+\s*/gm, '').trim().slice(0, 1500);
 const traspaso = x.pasar_a_persona === true;
 const d = x.datos || {};
