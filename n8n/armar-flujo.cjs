@@ -6,7 +6,7 @@
 //  - f15-formularios-kommo.json: recibe los formularios del sitio (/api/contact) y los crea en Kommo con su Origen (F1).
 //  - f16-agente-whatsapp.json: agente de WhatsApp con Claude (F7); lo llama el webhook de Kommo "mensaje entrante".
 //    Necesita CRED_CLAUDE=<id de la credencial Anthropic "Claude (agente WhatsApp)">.
-// Uso: CRED_CALENDLY=0U9bkwTaH0qwcc9h CRED_CLAUDE=lI6pyiToLgn65AwG node n8n/armar-flujo.cjs  (ids de las credenciales "Calendly (lectura)" y "Claude (agente WhatsApp)" en n8n)
+// Uso: AGENTE_EN_VIVO=1 CRED_CALENDLY=0U9bkwTaH0qwcc9h CRED_CLAUDE=lI6pyiToLgn65AwG node n8n/armar-flujo.cjs  (ids de las credenciales "Calendly (lectura)" y "Claude (agente WhatsApp)" en n8n)
 // Las credenciales se referencian por id (se crean a mano en n8n; las claves nunca van en este repositorio).
 const fs = require('fs');
 const path = require('path');
