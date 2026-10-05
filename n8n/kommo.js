@@ -9,10 +9,13 @@ const sumar = (f, n) => { const d = new Date(f + 'T00:00:00Z'); d.setUTCDate(d.g
 const desde = sumar(hoy, manual ? -364 : -2);
 const unix = Math.floor(new Date(desde + 'T00:00:00-05:00').getTime() / 1000); // medianoche de Bogotá
 const PAG_LEADS = 4, PAG_EVENTOS = manual ? 20 : 3; // 250 oportunidades y 100 cambios por página
+// Los chats sin aceptar (etapa "Leads entrantes") no salen en /leads: hay que pedirlos por la etapa.
+const EMBUDO = 14551307, ETAPA_ENTRANTES = 112413247;
 
 return [
   { json: { tipo: 'etapas', url: `${BASE}/leads/pipelines` } },
   { json: { tipo: 'usuarios', url: `${BASE}/users?limit=250` } },
+  { json: { tipo: 'entrantes', url: `${BASE}/leads?limit=250&with=loss_reason&filter[statuses][0][pipeline_id]=${EMBUDO}&filter[statuses][0][status_id]=${ETAPA_ENTRANTES}` } },
   ...Array.from({ length: PAG_LEADS }, (_, i) => ({ json: { tipo: 'leads', pagina: i + 1, ultima: i === PAG_LEADS - 1,
     url: `${BASE}/leads?limit=250&page=${i + 1}&with=loss_reason` } })),
   ...Array.from({ length: PAG_EVENTOS }, (_, i) => ({ json: { tipo: 'eventos', pagina: i + 1, ultima: i === PAG_EVENTOS - 1, desde, hasta: hoy,
@@ -51,6 +54,10 @@ respuestas.forEach((r, i) => {
     }
   } else if (t.tipo === 'usuarios') {
     for (const u of e.users || []) usuarios[u.id] = u.name;
+  } else if (t.tipo === 'entrantes') {
+    const lista = e.leads || [];
+    if (lista.length >= 250) throw new Error('Hay más de 250 chats en Leads entrantes: hay que paginar el trabajo "entrantes" en "Trabajos Kommo"');
+    for (const l of lista) leads.set(l.id, l);
   } else if (t.tipo === 'leads') {
     const lista = e.leads || [];
     if (t.ultima && lista.length >= 250) throw new Error('Kommo tiene más de 1.000 oportunidades: hay que subir PAG_LEADS en "Trabajos Kommo"');
