@@ -16,7 +16,7 @@ const desde = manual ? '2020-01-01T00:00:00Z' : new Date(Date.now() - 3 * 864000
 return [
   ...campanas.map((c) => ({ json: { tipo: 'analitica', campana_id: String(c.id), campana: c.name || '',
     url: `${BASE}/campaigns/${c.id}/analytics?period=all` } })),
-  { json: { tipo: 'leads', url: `${BASE}/hot-leads?limit=500&since=${encodeURIComponent(desde)}` } },
+  { json: { tipo: 'leads', url: `${BASE}/hot-leads?limit=200&since=${encodeURIComponent(desde)}` } },
 ];
 
 // == Filas Explee (Code, una vez para todos los elementos)
@@ -49,7 +49,7 @@ respuestas.forEach((r, i) => {
       enviados: num(a.emails_sent), respuestas: num(a.total_replies), leads: num(a.hot_leads), gasto_usd: num(a.spend_usd) });
   } else {
     const lista = r.json.leads || [];
-    if (lista.length >= 500) throw new Error('Explee devolvió 500 leads calientes o más: hay que paginar el pedido de leads en "Pedidos Explee"');
+    if (lista.length >= 200) throw new Error('Explee devolvió 200 leads calientes o más (el máximo por pedido): hay que paginar el pedido de leads en "Pedidos Explee"');
     for (const l of lista) leads.set(`${l.email}|${l.company_domain}`, l);
   }
 });
