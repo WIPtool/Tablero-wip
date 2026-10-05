@@ -29,6 +29,13 @@ return normal.map((n, i) => {
   const f = n.json;
   const base = { clave: f.clave, datos: f };
   const contacto = [...contactos(porCorreo[i]), ...contactos(porTelefono[i])][0];
+  // Oportunidad ya identificada (p. ej. la cita viene del enlace del agente de WhatsApp): se actualiza esa, si sigue abierta.
+  if (f.kommo_lead && !CERRADAS.has(etapaDe.get(f.kommo_lead))) {
+    const id = f.kommo_lead, etapa = etapaDe.get(id);
+    const mover = f.objetivo === 'reunion' && (etapa === undefined || TEMPRANAS.has(etapa));
+    return { json: { ...base, accion: mover ? 'movida' : 'existente', contacto_id: contacto ? contacto.id : null, kommo_lead_id: id, metodo: 'PATCH', url: `${BASE}/leads`,
+      cuerpo: [{ id, tags_to_add: [{ name: f.etiqueta }], ...(mover ? { pipeline_id: EMBUDO, status_id: ETAPA.reunion } : {}) }] } };
+  }
   if (contacto) {
     const abiertas = ((contacto._embedded && contacto._embedded.leads) || []).map((l) => l.id)
       .filter((id) => !CERRADAS.has(etapaDe.get(id))).sort((a, b) => b - a);

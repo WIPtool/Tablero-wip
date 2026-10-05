@@ -4,6 +4,8 @@
 //    Si se define CRED_CALENDLY=<id de la credencial>, también pasa a Kommo las citas nuevas de Calendly (F2, sitio-calendly.js).
 //  - f14-google-ads.json:    recibe lo que envía el script de Google Ads y lo guarda en Supabase.
 //  - f15-formularios-kommo.json: recibe los formularios del sitio (/api/contact) y los crea en Kommo con su Origen (F1).
+//  - f16-agente-whatsapp.json: agente de WhatsApp con Claude (F7); lo llama el webhook de Kommo "mensaje entrante".
+//    Necesita CRED_CLAUDE=<id de la credencial Anthropic "Claude (agente WhatsApp)">.
 // Uso: CRED_CALENDLY=0U9bkwTaH0qwcc9h node n8n/armar-flujo.cjs  (id de la credencial "Calendly (lectura)" en n8n)
 // Las credenciales se referencian por id (se crean a mano en n8n; las claves nunca van en este repositorio).
 const fs = require('fs');
@@ -23,6 +25,11 @@ const CRED = {
 const CRED_CALENDLY = process.env.CRED_CALENDLY ? { httpHeaderAuth: { id: process.env.CRED_CALENDLY, name: 'Calendly (lectura)' } } : null;
 // Ruta del webhook que llama /api/contact del sitio (debe coincidir con N8N_LEADS_URL de api/contact.js en landing-wip).
 const RUTA_LEADS = 'leads-sitio-4f9b2c7e1a8d43e6b0d5';
+// Agente de WhatsApp: ruta del webhook que llama Kommo, credencial de Claude, campo y Salesbot de Kommo.
+const RUTA_AGENTE = 'agente-wa-8d2e61c4b7f94a05a3e9';
+const CRED_CLAUDE = process.env.CRED_CLAUDE ? { anthropicApi: { id: process.env.CRED_CLAUDE, name: 'Claude (agente WhatsApp)' } } : null;
+const CAMPO_RESPUESTA = 493668; // oportunidad: "Respuesta del agente"
+const BOT_RESPUESTA = 16206;    // Salesbot "Agente WhatsApp: enviar respuesta" (envía ese campo por WhatsApp)
 // Ruta del webhook que llama el script de Google Ads (difícil de adivinar; no da acceso a nada, solo recibe cifras).
 const RUTA_GADS = 'gads-7c1e4b9a2f6d48e3a51c';
 
@@ -51,6 +58,8 @@ const KOMMO = partes('kommo.js');
 const F4 = partes('explee-kommo.js');
 const COMUN = partes('kommo-crear.js');
 const SITIO = partes('sitio-calendly.js');
+const AGENTE = partes('agente.js');
+const INSTRUCCIONES = leer('agente-instrucciones.md').trim().replace(/\\/g, '\\\\').replace(/`/g, '\\`').replace(/\$\{/g, '\\${');
 const codigoTexto = (id, name, posicion, js) => ({ id, name, type: 'n8n-nodes-base.code', typeVersion: 2, position: posicion, parameters: { jsCode: js } });
 const http = (id, name, posicion, extra) => ({
   id, name, type: 'n8n-nodes-base.httpRequest', typeVersion: 4.2, position: posicion,
@@ -252,5 +261,63 @@ const f15 = {
 
 fs.writeFileSync(path.join(__dirname, 'f12-carga-tablero.json'), JSON.stringify(f12, null, 2));
 fs.writeFileSync(path.join(__dirname, 'f15-formularios-kommo.json'), JSON.stringify(f15, null, 2));
+
+// F7 · Agente de WhatsApp con Claude
+if (CRED_CLAUDE) {
+  const id = (k) => `d4f0c0de-00${String(k).padStart(2, '0')}-4000-8000-0000000000${String(k).padStart(2, '0')}`;
+  const auth = { authentication: 'genericCredentialType', genericAuthType: 'httpHeaderAuth' };
+  const cuerpoJson = (expr) => ({ sendBody: true, specifyBody: 'json', jsonBody: `={{ JSON.stringify(${expr}) }}` });
+  const supabaseInsert = (prefer) => ({ sendHeaders: true, headerParameters: { parameters: [{ name: 'Prefer', value: prefer }] } });
+  const respuesta = "$('Respuesta de Claude').first().json";
+  const f16 = {
+    name: 'F16 · Agente de WhatsApp con Claude (lo llama Kommo)',
+    nodes: [
+      { id: id(1), name: 'Mensaje de Kommo', type: 'n8n-nodes-base.webhook', typeVersion: 2, position: [0, 0],
+        webhookId: 'd4f0c0de-0001-4000-8000-0000000c0de7', parameters: { httpMethod: 'POST', path: RUTA_AGENTE, responseMode: 'onReceived', options: {} } },
+      codigoTexto(id(2), 'Mensaje entrante', [200, 0], AGENTE['Mensaje entrante']),
+      http(id(3), 'Guardar mensaje', [400, 0], { parameters: { method: 'POST', url: `${SUPABASE}/rest/v1/agente_mensajes?on_conflict=mensaje_id`, ...auth,
+        ...supabaseInsert('resolution=ignore-duplicates,return=minimal'),
+        ...cuerpoJson('{ lead_id: $json.lead_id, rol: "cliente", texto: $json.texto, mensaje_id: $json.mensaje_id, talk_id: $json.talk_id, momento: $json.momento }') },
+        credentials: CRED.supabase }),
+      { id: id(4), name: 'Esperar', type: 'n8n-nodes-base.wait', typeVersion: 1.1, position: [600, 0], webhookId: 'd4f0c0de-0004-4000-8000-0000000c0de8',
+        parameters: { amount: 20, unit: 'seconds' } },
+      { ...http(id(5), 'Historial', [800, 0], { parameters: {
+        url: `=${SUPABASE}/rest/v1/agente_mensajes?select=rol,texto,mensaje_id,momento&lead_id=eq.{{ $('Mensaje entrante').first().json.lead_id }}&order=momento.desc&limit=40`, ...auth },
+        credentials: CRED.supabase }), alwaysOutputData: true },
+      { ...http(id(6), 'Lead en Kommo', [1000, 0], { parameters: {
+        url: "=https://wiptool.kommo.com/api/v4/leads/{{ $('Mensaje entrante').first().json.lead_id }}", ...auth }, credentials: CRED.kommo }), executeOnce: true },
+      codigoTexto(id(7), 'Decidir y preguntar a Claude', [1200, 0], AGENTE['Decidir y preguntar a Claude'].split('__INSTRUCCIONES__').join(INSTRUCCIONES)),
+      http(id(8), 'Claude', [1400, 0], { parameters: { method: 'POST', url: 'https://api.anthropic.com/v1/messages',
+        authentication: 'predefinedCredentialType', nodeCredentialType: 'anthropicApi',
+        sendHeaders: true, headerParameters: { parameters: [{ name: 'anthropic-version', value: '2023-06-01' }] }, ...cuerpoJson('$json.pedido') },
+        credentials: CRED_CLAUDE }),
+      codigoTexto(id(9), 'Respuesta de Claude', [1600, 0], AGENTE['Respuesta de Claude']
+        .split('__CAMPO_RESPUESTA__').join(String(CAMPO_RESPUESTA)).split('__BOT_RESPUESTA__').join(String(BOT_RESPUESTA))),
+      http(id(10), 'Escribir respuesta en Kommo', [1800, 0], { parameters: { method: 'PATCH', url: 'https://wiptool.kommo.com/api/v4/leads', ...auth,
+        ...cuerpoJson('$json.kommo') }, credentials: CRED.kommo }),
+      http(id(11), 'Enviar por WhatsApp', [2000, 0], { parameters: { method: 'POST', url: 'https://wiptool.kommo.com/api/v2/salesbot/run', ...auth,
+        ...cuerpoJson(`${respuesta}.bot`) }, credentials: CRED.kommo }),
+      http(id(12), 'Guardar respuesta', [2200, 0], { parameters: { method: 'POST', url: `${SUPABASE}/rest/v1/agente_mensajes`, ...auth,
+        ...supabaseInsert('return=minimal'), ...cuerpoJson(`${respuesta}.guardar`) }, credentials: CRED.supabase }),
+      codigoTexto(id(13), 'Solo si pasa a persona', [2400, 0], `return ${respuesta}.traspaso ? [{ json: {} }] : [];\n`),
+      http(id(14), 'Tarea en Kommo', [2600, 0], { parameters: { method: 'POST', url: 'https://wiptool.kommo.com/api/v4/tasks', ...auth,
+        ...cuerpoJson(`${respuesta}.tarea`) }, credentials: CRED.kommo }),
+      http(id(15), 'Nota de traspaso', [2800, 0], { parameters: { method: 'POST', url: 'https://wiptool.kommo.com/api/v4/leads/notes', ...auth,
+        ...cuerpoJson(`${respuesta}.nota`) }, credentials: CRED.kommo }),
+      { ...http(id(16), 'Correo de traspaso', [3000, 0], { parameters: { method: 'POST', url: 'https://api.brevo.com/v3/smtp/email', ...auth,
+        ...cuerpoJson(`${respuesta}.correo`) }, credentials: CRED.brevo }), onError: 'continueRegularOutput' },
+    ],
+    connections: {
+      'Mensaje de Kommo': a('Mensaje entrante'), 'Mensaje entrante': a('Guardar mensaje'), 'Guardar mensaje': a('Esperar'), Esperar: a('Historial'),
+      Historial: a('Lead en Kommo'), 'Lead en Kommo': a('Decidir y preguntar a Claude'), 'Decidir y preguntar a Claude': a('Claude'),
+      Claude: a('Respuesta de Claude'), 'Respuesta de Claude': a('Escribir respuesta en Kommo'), 'Escribir respuesta en Kommo': a('Enviar por WhatsApp'),
+      'Enviar por WhatsApp': a('Guardar respuesta'), 'Guardar respuesta': a('Solo si pasa a persona'), 'Solo si pasa a persona': a('Tarea en Kommo'),
+      'Tarea en Kommo': a('Nota de traspaso'), 'Nota de traspaso': a('Correo de traspaso'),
+    },
+    settings: { executionOrder: 'v1', timezone: 'America/Bogota' },
+    pinData: {},
+  };
+  fs.writeFileSync(path.join(__dirname, 'f16-agente-whatsapp.json'), JSON.stringify(f16, null, 2));
+}
 fs.writeFileSync(path.join(__dirname, 'f14-google-ads.json'), JSON.stringify(f14, null, 2));
 console.log('ok · webhook de Google Ads: https://wiptool.app.n8n.cloud/webhook/' + RUTA_GADS);

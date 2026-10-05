@@ -72,6 +72,8 @@ respuestas.forEach((resp, i) => {
     const telefono = respuesta(/tel[eé]f|whats|celular|m[oó]vil|phone/i) || inv.text_reminder_number || '';
     const t = inv.tracking || {};
     const origen = String(t.utm_source || '').toLowerCase();
+    // El agente de WhatsApp manda el enlace con utm_content=kommo-<id de la oportunidad>: se usa esa oportunidad directamente.
+    const directo = /^kommo-(\d+)$/.exec(String(t.utm_content || ''));
     const nota = [
       `Reunión agendada en Calendly: ${c.nombre_evento}`,
       `Fecha de la reunión: ${c.inicio ? hora.format(new Date(c.inicio)) : '—'}`,
@@ -80,7 +82,7 @@ respuestas.forEach((resp, i) => {
       ...qa.filter((x) => x.answer).map((x) => `${x.question}: ${x.answer}`),
     ].filter(Boolean).join('\n');
     salida.push({ json: {
-      clave: inv.uri, evento: c.evento, nombre: inv.name || '', correo, telefono,
+      clave: inv.uri, evento: c.evento, kommo_lead: directo ? Number(directo[1]) : null, nombre: inv.name || '', correo, telefono,
       empresa: respuesta(/empresa|compa[ñn][ií]a|company|organizaci/i), dominio: LIBRES.test(dom) ? '' : dom, cargo: respuesta(/cargo|puesto|rol\b|job|title/i),
       origen: ORIGEN[origen] || ORIGEN.sitio_web, campana: t.utm_campaign || 'Reunión en Calendly', objetivo: 'reunion',
       fecha: inv.created_at ? dia.format(new Date(inv.created_at)) : '', etiqueta: 'Calendly', nota,
