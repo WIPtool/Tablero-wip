@@ -104,7 +104,7 @@ const herramienta = {
   input_schema: {
     type: 'object',
     properties: {
-      respuesta: { type: 'string', description: 'El mensaje de WhatsApp: máximo 2 o 3 frases, sin markdown.' },
+      respuesta: { type: 'string', description: 'El mensaje de WhatsApp: máximo 2 frases cortas, con 1 o 2 emojis, sin markdown.' },
       pasar_a_persona: { type: 'boolean', description: 'true si un asesor debe continuar la conversación.' },
       motivo_traspaso: { type: 'string', description: 'Si pasar_a_persona es true: resumen breve de la conversación y por qué.' },
       datos: {
