@@ -26,6 +26,18 @@ if (!texto) return [];
 return [{ json: { lead_id: lead, mensaje_id: String(m.id || `${lead}-${m.created_at || Date.now()}`), talk_id: String(m.talk_id || ''), texto,
   momento: m.created_at ? new Date(Number(m.created_at) * 1000).toISOString() : new Date().toISOString() } }];
 
+// == Anuncio a buscar (Code, una vez para todos los elementos)
+// Si la oportunidad llegó por un anuncio de Meta (utm_campaign y utm_content), pide su texto a Supabase (tabla meta_anuncio).
+const SUPABASE = '__SUPABASE__';
+const leadR = $input.first().json;
+const lead = typeof leadR.data === 'string' ? JSON.parse(leadR.data) : leadR;
+const utm = (code) => { const f = (lead.custom_fields_values || []).find((x) => x.field_code === code); return f && f.values[0] ? String(f.values[0].value) : ''; };
+const campana = utm('UTM_CAMPAIGN'), anuncio = utm('UTM_CONTENT');
+const url = campana && anuncio
+  ? `${SUPABASE}/rest/v1/meta_anuncio?select=nombre,campana,texto&campana=eq.${encodeURIComponent(campana)}&nombre=eq.${encodeURIComponent(anuncio)}&limit=1`
+  : `${SUPABASE}/rest/v1/meta_anuncio?select=nombre&anuncio_id=eq.ninguno`;
+return [{ json: { url } }];
+
 // == Decidir y preguntar a Claude (Code, una vez para todos los elementos)
 // Revisa que este siga siendo el último mensaje del cliente y que la oportunidad sea un prospecto; arma el pedido a Claude.
 const MODELO = 'claude-sonnet-5-5';
@@ -34,7 +46,7 @@ const ORIGEN_UTM = { 'Meta Ads': 'meta_ads', Instagram: 'instagram', Facebook: '
   'Sitio web': 'sitio_web', 'Google Ads': 'google', LinkedIn: 'linkedin', Referido: 'referido', 'App sin app': 'app_sin_app' };
 const yo = $('Mensaje entrante').first().json;
 const historial = $('Historial').all().map((i) => i.json).filter((h) => h.rol).reverse(); // llega del más nuevo al más viejo
-const leadR = $input.first().json;
+const leadR = $('Lead en Kommo').first().json;
 const lead = typeof leadR.data === 'string' ? JSON.parse(leadR.data) : leadR;
 const ultimoCliente = historial.filter((h) => h.rol === 'cliente').pop();
 if (ultimoCliente && ultimoCliente.mensaje_id !== yo.mensaje_id) return []; // llegó otro mensaje después: responde esa ejecución
@@ -45,7 +57,16 @@ if (etiquetas.includes('Atender persona') || etiquetas.includes('Agente pausado'
 const MODO_PRUEBA = __MODO_PRUEBA__;
 if (MODO_PRUEBA && !etiquetas.includes('Prueba agente')) return [];
 const campo = (n) => { const f = (lead.custom_fields_values || []).find((x) => x.field_name === n); return f && f.values[0] ? String(f.values[0].value) : ''; };
-const origen = campo('Origen');
+const utm = (code) => { const f = (lead.custom_fields_values || []).find((x) => x.field_code === code); return f && f.values[0] ? String(f.values[0].value) : ''; };
+// Si el campo Origen está vacío pero el chat trae utm_source=meta_ads (parámetros de los anuncios), es Meta Ads.
+const origen = campo('Origen') || (utm('UTM_SOURCE') === 'meta_ads' ? 'Meta Ads' : '');
+// Anuncio que vio la persona (texto desde meta_anuncio) y plataforma, si Meta la reemplazó en utm_term.
+const anuncio = $input.all().map((i) => i.json).find((a) => a.texto) || null;
+const plataforma = { fb: 'Facebook', facebook: 'Facebook', ig: 'Instagram', instagram: 'Instagram', msg: 'Messenger', an: 'Audience Network' }[utm('UTM_TERM').toLowerCase()] || '';
+const lineaAnuncio = utm('UTM_CONTENT')
+  ? `- Llegó por un anuncio de Meta${plataforma ? ' en ' + plataforma : ''}${anuncio ? '. Texto del anuncio: «' + anuncio.texto + '»' : ' (no tengo el texto del anuncio)'}. Úsalo para entender qué le interesó; no menciones nombres internos de campañas ni de anuncios.`
+  : '';
+const campanaKommo = campo('Campaña');
 const agenda = `https://calendly.com/comercial-wiptool/acercamiento-wip?utm_source=${ORIGEN_UTM[origen] || 'whatsapp'}&utm_medium=agente_whatsapp&utm_content=kommo-${lead.id}`;
 // Historial en formato de Claude: cliente → user, agente → assistant; mensajes seguidos del mismo rol se juntan.
 const mensajes = [];
@@ -61,8 +82,8 @@ const sistema = `__INSTRUCCIONES__
 
 # Contexto de esta conversación
 - Fecha y hora en Colombia: ${hoy}
-- La persona llegó por: ${origen || 'origen desconocido'}
-- Enlace para agendar la reunión (úsalo tal cual): ${agenda}
+- La persona llegó por: ${origen || 'origen desconocido'}${campanaKommo && !utm('UTM_CONTENT') ? ' (campaña: ' + campanaKommo + ')' : ''}
+${lineaAnuncio ? lineaAnuncio + '\n' : ''}- Enlace para agendar la reunión (úsalo tal cual): ${agenda}
 
 # Formato de salida
 Responde SIEMPRE llamando la herramienta responder, una sola vez, con el mensaje de WhatsApp en respuesta. No escribas texto fuera de la herramienta.`;

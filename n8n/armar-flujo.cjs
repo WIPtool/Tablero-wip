@@ -61,6 +61,7 @@ const F4 = partes('explee-kommo.js');
 const COMUN = partes('kommo-crear.js');
 const SITIO = partes('sitio-calendly.js');
 const AGENTE = partes('agente.js');
+const ANUNCIOS = partes('anuncios-meta.js');
 const INSTRUCCIONES = leer('agente-instrucciones.md').trim().replace(/\\/g, '\\\\').replace(/`/g, '\\`').replace(/\$\{/g, '\\${');
 const codigoTexto = (id, name, posicion, js) => ({ id, name, type: 'n8n-nodes-base.code', typeVersion: 2, position: posicion, parameters: { jsCode: js } });
 const http = (id, name, posicion, extra) => ({
@@ -133,7 +134,17 @@ const F2 = (() => {
   };
   return { nodos, conexiones, inicio: ['Trabajos Calendly'] };
 })();
-const ARRANQUE = [...INICIOS.slice(0, -1), ...F2.inicio, INICIOS[INICIOS.length - 1]];
+// Anuncios activos de Meta con su texto (para el agente de WhatsApp).
+const ANUNCIOS_META = {
+  nodos: [
+    codigoTexto('a1f0c0de-0301-4000-8000-000000000301', 'Trabajos anuncios Meta', [260, 1500], ANUNCIOS['Trabajos anuncios Meta']),
+    http('a1f0c0de-0302-4000-8000-000000000302', 'Consultar anuncios Meta', [500, 1500], {
+      parameters: { authentication: 'genericCredentialType', genericAuthType: 'httpHeaderAuth' }, credentials: CRED.meta }),
+    codigoTexto('a1f0c0de-0303-4000-8000-000000000303', 'Filas anuncios Meta', [740, 1500], ANUNCIOS['Filas anuncios Meta']),
+  ],
+  conexiones: { 'Trabajos anuncios Meta': a('Consultar anuncios Meta'), 'Consultar anuncios Meta': a('Filas anuncios Meta'), 'Filas anuncios Meta': a('Guardar en Supabase') },
+};
+const ARRANQUE = [...INICIOS.slice(0, -1), 'Trabajos anuncios Meta', ...F2.inicio, INICIOS[INICIOS.length - 1]];
 const f12 = {
   name: 'F12 · Carga del tablero (Google, Meta y TRM → Supabase)',
   nodes: [
@@ -211,11 +222,13 @@ const f12 = {
 
     guardar('a1f0c0de-0006-4000-8000-000000000006', [1100, 300]),
     ...F2.nodos,
+    ...ANUNCIOS_META.nodos,
   ],
   connections: {
     'Cada hora': varios(...ARRANQUE),
     'Cargar histórico (a mano)': varios(...ARRANQUE),
     ...F2.conexiones,
+    ...ANUNCIOS_META.conexiones,
     'Trabajos Google': a('Consultar Google'), 'Consultar Google': a('Filas Google'), 'Filas Google': a('Guardar en Supabase'),
     'Trabajos Meta': a('Consultar Meta'), 'Consultar Meta': a('Filas Meta'), 'Filas Meta': a('Guardar en Supabase'),
     'Trabajos TRM': a('Consultar TRM'), 'Consultar TRM': a('Filas TRM'), 'Filas TRM': a('Guardar en Supabase'),
@@ -288,6 +301,8 @@ if (CRED_CLAUDE) {
         credentials: CRED.supabase }), alwaysOutputData: true },
       { ...http(id(6), 'Lead en Kommo', [1000, 0], { parameters: {
         url: "=https://wiptool.kommo.com/api/v4/leads/{{ $('Mensaje entrante').first().json.lead_id }}", ...auth }, credentials: CRED.kommo }), executeOnce: true },
+      codigoTexto(id(17), 'Anuncio a buscar', [1100, 160], AGENTE['Anuncio a buscar'].split('__SUPABASE__').join(SUPABASE)),
+      { ...http(id(18), 'Anuncio de Meta', [1150, 0], { parameters: { ...auth }, credentials: CRED.supabase }), alwaysOutputData: true },
       codigoTexto(id(7), 'Decidir y preguntar a Claude', [1200, 0], AGENTE['Decidir y preguntar a Claude'].split('__INSTRUCCIONES__').join(INSTRUCCIONES).split('__MODO_PRUEBA__').join(String(MODO_PRUEBA))),
       http(id(8), 'Claude', [1400, 0], { parameters: { method: 'POST', url: 'https://api.anthropic.com/v1/messages',
         authentication: 'predefinedCredentialType', nodeCredentialType: 'anthropicApi',
@@ -311,7 +326,7 @@ if (CRED_CLAUDE) {
     ],
     connections: {
       'Mensaje de Kommo': a('Mensaje entrante'), 'Mensaje entrante': a('Guardar mensaje'), 'Guardar mensaje': a('Esperar'), Esperar: a('Historial'),
-      Historial: a('Lead en Kommo'), 'Lead en Kommo': a('Decidir y preguntar a Claude'), 'Decidir y preguntar a Claude': a('Claude'),
+      Historial: a('Lead en Kommo'), 'Lead en Kommo': a('Anuncio a buscar'), 'Anuncio a buscar': a('Anuncio de Meta'), 'Anuncio de Meta': a('Decidir y preguntar a Claude'), 'Decidir y preguntar a Claude': a('Claude'),
       Claude: a('Respuesta de Claude'), 'Respuesta de Claude': a('Escribir respuesta en Kommo'), 'Escribir respuesta en Kommo': a('Enviar por WhatsApp'),
       'Enviar por WhatsApp': a('Guardar respuesta'), 'Guardar respuesta': a('Solo si pasa a persona'), 'Solo si pasa a persona': a('Tarea en Kommo'),
       'Tarea en Kommo': a('Nota de traspaso'), 'Nota de traspaso': a('Correo de traspaso'),

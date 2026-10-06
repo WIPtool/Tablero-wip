@@ -1106,6 +1106,62 @@
           "name": "Supabase (tablero)"
         }
       }
+    },
+    {
+      "id": "a1f0c0de-0301-4000-8000-000000000301",
+      "name": "Trabajos anuncios Meta",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        260,
+        1500
+      ],
+      "parameters": {
+        "jsCode": "const CUENTA = 'act_1212455492189816';\nconst qs = Object.entries({\n  fields: 'name,effective_status,campaign{name},adset{name},creative{title,body,object_story_spec,asset_feed_spec}',\n  filtering: JSON.stringify([{ field: 'effective_status', operator: 'IN', value: ['ACTIVE', 'PENDING_REVIEW', 'IN_PROCESS', 'WITH_ISSUES'] }]),\n  limit: '200',\n}).map(([k, v]) => `${k}=${encodeURIComponent(v)}`).join('&');\nreturn [{ json: { url: `https://graph.facebook.com/v23.0/${CUENTA}/ads?${qs}` } }];\n"
+      }
+    },
+    {
+      "id": "a1f0c0de-0302-4000-8000-000000000302",
+      "name": "Consultar anuncios Meta",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        500,
+        1500
+      ],
+      "parameters": {
+        "method": "GET",
+        "url": "={{ $json.url }}",
+        "options": {
+          "batching": {
+            "batch": {
+              "batchSize": 1,
+              "batchInterval": 300
+            }
+          }
+        },
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth"
+      },
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "uRqVoTmjjMMQhVze",
+          "name": "Meta Ads (lectura)"
+        }
+      }
+    },
+    {
+      "id": "a1f0c0de-0303-4000-8000-000000000303",
+      "name": "Filas anuncios Meta",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        740,
+        1500
+      ],
+      "parameters": {
+        "jsCode": "// Junta el título y el texto del anuncio, estén donde estén (anuncio normal, de video o con varias versiones de texto).\nconst r = $input.first().json;\nconst anuncios = r.data || [];\nconst textoDe = (c) => {\n  if (!c) return '';\n  const oss = c.object_story_spec || {};\n  const ld = oss.link_data || {}, vd = oss.video_data || {};\n  const afs = c.asset_feed_spec || {};\n  const partes = [c.title, c.body, ld.name, ld.message, ld.description, vd.title, vd.message,\n    ...(afs.titles || []).map((x) => x.text), ...(afs.bodies || []).map((x) => x.text)];\n  return [...new Set(partes.map((x) => String(x || '').trim()).filter(Boolean))].join(' · ').slice(0, 800);\n};\nconst filas = anuncios.map((a) => ({\n  fecha: null, anuncio_id: String(a.id), nombre: a.name || '', campana: (a.campaign && a.campaign.name) || '',\n  conjunto: (a.adset && a.adset.name) || '', estado: a.effective_status || '', texto: textoDe(a.creative),\n}));\nconst hoy = new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Bogota' }).format(new Date());\nreturn [{ json: { p_tabla: 'meta_anuncio', p_desde: hoy, p_hasta: hoy, p_filas: filas, p_fuente: null, p_sitio: null } }];\n"
+      }
     }
   ],
   "connections": {
@@ -1134,6 +1190,11 @@
           },
           {
             "node": "Trabajos Explee",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Trabajos anuncios Meta",
             "type": "main",
             "index": 0
           },
@@ -1175,6 +1236,11 @@
           },
           {
             "node": "Trabajos Explee",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Trabajos anuncios Meta",
             "type": "main",
             "index": 0
           },
@@ -1361,6 +1427,39 @@
         [
           {
             "node": "Registrar en Supabase (Calendly)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Trabajos anuncios Meta": {
+      "main": [
+        [
+          {
+            "node": "Consultar anuncios Meta",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Consultar anuncios Meta": {
+      "main": [
+        [
+          {
+            "node": "Filas anuncios Meta",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Filas anuncios Meta": {
+      "main": [
+        [
+          {
+            "node": "Guardar en Supabase",
             "type": "main",
             "index": 0
           }
