@@ -1117,7 +1117,7 @@
         1500
       ],
       "parameters": {
-        "jsCode": "const CUENTA = 'act_1212455492189816';\nconst qs = Object.entries({\n  fields: 'name,effective_status,campaign{name},adset{name},creative{title,body,object_story_spec,asset_feed_spec}',\n  filtering: JSON.stringify([{ field: 'effective_status', operator: 'IN', value: ['ACTIVE', 'PENDING_REVIEW', 'IN_PROCESS', 'WITH_ISSUES'] }]),\n  limit: '200',\n}).map(([k, v]) => `${k}=${encodeURIComponent(v)}`).join('&');\nreturn [{ json: { url: `https://graph.facebook.com/v23.0/${CUENTA}/ads?${qs}` } }];\n"
+        "jsCode": "const CUENTA = 'act_1212455492189816';\nconst qs = Object.entries({\n  fields: 'name,effective_status,campaign{name},adset{name},creative{title,body,object_story_spec,asset_feed_spec}',\n  filtering: JSON.stringify([{ field: 'effective_status', operator: 'IN', value: ['ACTIVE', 'PENDING_REVIEW', 'IN_PROCESS'] }]),\n  limit: '200', // con solo los activos son unos 60; WITH_ISSUES traía 140 anuncios viejos de 2021 y llenaba el cupo\n}).map(([k, v]) => `${k}=${encodeURIComponent(v)}`).join('&');\nreturn [{ json: { url: `https://graph.facebook.com/v23.0/${CUENTA}/ads?${qs}` } }];\n"
       }
     },
     {

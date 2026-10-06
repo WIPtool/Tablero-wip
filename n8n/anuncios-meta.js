@@ -6,8 +6,8 @@
 const CUENTA = 'act_1212455492189816';
 const qs = Object.entries({
   fields: 'name,effective_status,campaign{name},adset{name},creative{title,body,object_story_spec,asset_feed_spec}',
-  filtering: JSON.stringify([{ field: 'effective_status', operator: 'IN', value: ['ACTIVE', 'PENDING_REVIEW', 'IN_PROCESS', 'WITH_ISSUES'] }]),
-  limit: '200',
+  filtering: JSON.stringify([{ field: 'effective_status', operator: 'IN', value: ['ACTIVE', 'PENDING_REVIEW', 'IN_PROCESS'] }]),
+  limit: '200', // con solo los activos son unos 60; WITH_ISSUES traía 140 anuncios viejos de 2021 y llenaba el cupo
 }).map(([k, v]) => `${k}=${encodeURIComponent(v)}`).join('&');
 return [{ json: { url: `https://graph.facebook.com/v23.0/${CUENTA}/ads?${qs}` } }];
 
