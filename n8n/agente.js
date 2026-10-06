@@ -244,6 +244,7 @@ ${ctx.texto}
 La persona dejó de responder. Escribe UN mensaje corto de seguimiento (máximo 20 palabras) que retome la conversación con naturalidad:
 - NO repitas la pregunta de tu último mensaje: si no la respondió, cambia de ángulo. No vuelvas a saludar como si fuera la primera vez, no reclames que no ha respondido ni presiones.
 - Aporta algo nuevo y útil según lo que preguntó: si preguntó por precios o el demo, ofrécele ver WIP en una reunión corta con el enlace de agenda (ahí se cotiza su caso); si preguntó qué hace WIP o si se puede personalizar, un enlace al sitio que le sirva o la reunión.
+- Si ofreces la reunión, pon el enlace de agenda en ese mismo mensaje; no preguntes "¿te paso el enlace?".
 - Termina con una pregunta de sí o no, fácil de responder.
 - 1 emoji de la lista permitida.
 No escribas (enviar = false) si la persona cerró la conversación: dijo que no le interesa, que no la contacten, que ya agendó, que lo revisará y avisará, o se despidió.
