@@ -30,6 +30,8 @@ const RUTA_AGENTE = 'agente-wa-8d2e61c4b7f94a05a3e9';
 const CRED_CLAUDE = process.env.CRED_CLAUDE ? { anthropicApi: { id: process.env.CRED_CLAUDE, name: 'Claude (agente WhatsApp)' } } : null;
 const CAMPO_RESPUESTA = 493668; // oportunidad: "Respuesta del agente"
 const BOT_RESPUESTA = 16206;    // Salesbot "Agente WhatsApp: enviar respuesta" (envía ese campo por WhatsApp)
+const BOT_PLANTILLA = 16850;    // Salesbot "Agente WhatsApp: plantilla retomar contacto" (plantilla de WhatsApp 8720, aprobada por Meta)
+const BOT_RECORDATORIO = 16852; // Salesbot "Agente WhatsApp: plantilla recordatorio" (plantilla de WhatsApp 8722, aprobada por Meta)
 // Modo prueba del agente: responde solo a oportunidades con la etiqueta "Prueba agente". AGENTE_EN_VIVO=1 lo quita.
 const MODO_PRUEBA = process.env.AGENTE_EN_VIVO !== '1';
 // Seguimiento: sin SEGUIMIENTO_EN_VIVO=1 solo guarda en Supabase los mensajes que propone (borrador), sin enviarlos.
@@ -157,7 +159,7 @@ const SEGUIMIENTO = (() => {
   const cuerpo = (expr) => ({ sendBody: true, specifyBody: 'json', jsonBody: `={{ JSON.stringify(${expr}) }}` });
   const preparar = (js) => conComun(js).split('__SUPABASE__').join(SUPABASE).split('__INSTRUCCIONES__').join(INSTRUCCIONES)
     .split('__CAMPO_RESPUESTA__').join(String(CAMPO_RESPUESTA)).split('__BOT_RESPUESTA__').join(String(BOT_RESPUESTA))
-    .split('__SEGUIMIENTO_EN_VIVO__').join(String(SEGUIMIENTO_EN_VIVO));
+    .split('__SEGUIMIENTO_EN_VIVO__').join(String(SEGUIMIENTO_EN_VIVO)).split('__BOT_PLANTILLA__').join(String(BOT_PLANTILLA));
   const y = 1700;
   const nodos = [
     codigoTexto(id(1), 'Trabajos seguimiento', [260, y], preparar(AGENTE['Trabajos seguimiento'])),
@@ -183,7 +185,53 @@ const SEGUIMIENTO = (() => {
   ];
   const nombres = nodos.map((x) => x.name);
   const conexiones = Object.fromEntries(nombres.slice(0, -1).map((nm, i) => [nm, a(nombres[i + 1])]));
-  return { nodos, conexiones, inicio: ['Trabajos seguimiento'] };
+  // Segundo seguimiento con plantilla (pasadas las 24 h): una vez, 2 a 5 días después del primer seguimiento sin respuesta.
+  const y2 = 1900;
+  const plantilla = [
+    codigoTexto(id(21), 'Trabajos plantilla', [260, y2], preparar(AGENTE['Trabajos plantilla'])),
+    http(id(22), 'Pendientes de plantilla', [420, y2], { parameters: auth, credentials: CRED.supabase }),
+    codigoTexto(id(23), 'Pedidos Kommo plantilla', [580, y2], preparar(AGENTE['Pedidos Kommo plantilla'])),
+    { ...http(id(24), 'Consultar Kommo (plantilla)', [740, y2], { parameters: auth, credentials: CRED.kommo }), alwaysOutputData: true, onError: 'continueRegularOutput' },
+    codigoTexto(id(25), 'Armar plantillas', [900, y2], preparar(AGENTE['Armar plantillas'])),
+    http(id(26), 'Guardar plantilla', [1060, y2], { parameters: { method: 'POST', url: `${SUPABASE}/rest/v1/agente_mensajes`, ...auth,
+      sendHeaders: true, headerParameters: { parameters: [{ name: 'Prefer', value: 'return=minimal' }] }, ...cuerpo('$json.guardar') },
+      credentials: CRED.supabase }),
+    http(id(27), 'Enviar plantilla por WhatsApp', [1220, y2], { parameters: { method: 'POST', url: 'https://wiptool.kommo.com/api/v2/salesbot/run', ...auth,
+      ...cuerpo("$('Armar plantillas').item.json.bot") }, credentials: CRED.kommo }),
+  ];
+  const nombres2 = plantilla.map((x) => x.name);
+  Object.assign(conexiones, Object.fromEntries(nombres2.slice(0, -1).map((nm, i) => [nm, a(nombres2[i + 1])])));
+  return { nodos: [...nodos, ...plantilla], conexiones, inicio: ['Trabajos seguimiento', 'Trabajos plantilla'] };
+})();
+// Recordatorio de reunión con plantilla: sale de "Usuario Calendly" (F2) y envía una vez por cita, el mismo día.
+const RECORDATORIO = (() => {
+  if (!CRED_CALENDLY) return { nodos: [], conexiones: {} };
+  const id = (k) => `a1f0c0de-05${String(k).padStart(2, '0')}-4000-8000-0000000005${String(k).padStart(2, '0')}`;
+  const auth = { authentication: 'genericCredentialType', genericAuthType: 'httpHeaderAuth' };
+  const cuerpo = (expr) => ({ sendBody: true, specifyBody: 'json', jsonBody: `={{ JSON.stringify(${expr}) }}` });
+  const preparar = (js) => js.split('__BOT_RECORDATORIO__').join(String(BOT_RECORDATORIO));
+  const y = 2100;
+  const nodos = [
+    codigoTexto(id(1), 'Pedidos recordatorio', [580, y], preparar(AGENTE['Pedidos recordatorio'])),
+    http(id(2), 'Citas de hoy (recordatorio)', [740, y], { parameters: auth, credentials: CRED_CALENDLY }),
+    { ...http(id(3), 'Registro citas (recordatorio)', [900, y], {
+      parameters: { url: `${SUPABASE}/rest/v1/calendly_kommo?select=evento,kommo_lead_id&recordatorio=is.null&kommo_lead_id=not.is.null`, ...auth },
+      credentials: CRED.supabase }), executeOnce: true, alwaysOutputData: true },
+    codigoTexto(id(4), 'Armar recordatorios', [1060, y], preparar(AGENTE['Armar recordatorios'])),
+    http(id(5), 'Marcar recordatorio', [1220, y], { parameters: { method: 'PATCH',
+      url: `=${SUPABASE}/rest/v1/calendly_kommo?evento=eq.{{ encodeURIComponent($json.evento) }}`, ...auth,
+      sendHeaders: true, headerParameters: { parameters: [{ name: 'Prefer', value: 'return=minimal' }] }, ...cuerpo('$json.marcar') },
+      credentials: CRED.supabase }),
+    http(id(6), 'Guardar recordatorio', [1380, y], { parameters: { method: 'POST', url: `${SUPABASE}/rest/v1/agente_mensajes`, ...auth,
+      sendHeaders: true, headerParameters: { parameters: [{ name: 'Prefer', value: 'return=minimal' }] }, ...cuerpo("$('Armar recordatorios').item.json.guardar") },
+      credentials: CRED.supabase }),
+    http(id(7), 'Enviar recordatorio por WhatsApp', [1540, y], { parameters: { method: 'POST', url: 'https://wiptool.kommo.com/api/v2/salesbot/run', ...auth,
+      ...cuerpo("$('Armar recordatorios').item.json.bot") }, credentials: CRED.kommo }),
+  ];
+  const nombres = nodos.map((x) => x.name);
+  const conexiones = Object.fromEntries(nombres.slice(0, -1).map((nm, i) => [nm, a(nombres[i + 1])]));
+  conexiones['Usuario Calendly'] = varios('Pedidos Calendly', 'Pedidos recordatorio');
+  return { nodos, conexiones };
 })();
 const ARRANQUE = [...INICIOS.slice(0, -1), 'Trabajos anuncios Meta', ...F2.inicio, INICIOS[INICIOS.length - 1], ...SEGUIMIENTO.inicio];
 const f12 = {
@@ -265,6 +313,7 @@ const f12 = {
     ...F2.nodos,
     ...ANUNCIOS_META.nodos,
     ...SEGUIMIENTO.nodos,
+    ...RECORDATORIO.nodos,
   ],
   connections: {
     'Cada hora': varios(...ARRANQUE),
@@ -272,6 +321,7 @@ const f12 = {
     ...F2.conexiones,
     ...ANUNCIOS_META.conexiones,
     ...SEGUIMIENTO.conexiones,
+    ...RECORDATORIO.conexiones,
     'Trabajos Google': a('Consultar Google'), 'Consultar Google': a('Filas Google'), 'Filas Google': a('Guardar en Supabase'),
     'Trabajos Meta': a('Consultar Meta'), 'Consultar Meta': a('Filas Meta'), 'Filas Meta': a('Guardar en Supabase'),
     'Trabajos TRM': a('Consultar TRM'), 'Consultar TRM': a('Filas TRM'), 'Filas TRM': a('Guardar en Supabase'),

@@ -295,3 +295,80 @@ return { json: {
     : { lead_id, rol: 'agente', tipo: 'sin_seguimiento', momento: new Date().toISOString(),
         texto: (propuesto ? `(borrador, no enviado) ${texto}` : `(sin seguimiento: ${x.motivo || 'Claude no devolvió mensaje'})`).slice(0, 1500) },
 } };
+
+// == Trabajos plantilla (Code, una vez para todos los elementos)
+// Segundo seguimiento con la plantilla "Retomar contacto WIP" (Salesbot __BOT_PLANTILLA__): de lunes a viernes, de 9 a. m. a 6 p. m.
+// La vista trae a quien recibió el primer seguimiento hace 2 a 5 días y no respondió.
+const SUPABASE = '__SUPABASE__';
+const ahora = new Date();
+const hora = Number(new Intl.DateTimeFormat('en-US', { timeZone: 'America/Bogota', hour: 'numeric', hourCycle: 'h23' }).format(ahora));
+const dia = new Intl.DateTimeFormat('en-US', { timeZone: 'America/Bogota', weekday: 'short' }).format(ahora);
+if (hora < 9 || hora >= 18 || dia === 'Sat' || dia === 'Sun') return [];
+return [{ json: { url: `${SUPABASE}/rest/v1/agente_plantilla_pendiente?select=lead_id,ult_seguimiento` } }];
+
+// == Pedidos Kommo plantilla (Code, una vez para todos los elementos)
+// Las oportunidades pendientes y hasta 6 páginas de mensajes enviados en los últimos 5 días (para ver si escribió alguien del equipo).
+const ids = $input.all().map((i) => i.json.lead_id).filter(Boolean);
+if (!ids.length) return [];
+const K = 'https://wiptool.kommo.com/api/v4';
+const desde = Math.floor(Date.now() / 1000) - 5 * 86400;
+return [
+  { json: { url: `${K}/leads?${ids.map((id) => 'filter[id][]=' + id).join('&')}&limit=250` } },
+  ...[1, 2, 3, 4, 5, 6].map((p) => ({ json: { url: `${K}/events?filter[type][]=outgoing_chat_message&filter[created_at][from]=${desde}&limit=100&page=${p}` } })),
+];
+
+// == Armar plantillas (Code, una vez para todos los elementos)
+// Solo prospectos (Leads entrantes o Nuevo) sin "Atender persona"/"Agente pausado" y sin mensajes del equipo después del
+// primer seguimiento (cualquier mensaje enviado más de 2 minutos después de ese seguimiento lo escribió una persona).
+__COMUN__
+const BOT_PLANTILLA = __BOT_PLANTILLA__;
+const TEXTO = 'Hola ✋ Te escribimos de WIP por tu consulta sobre la gestión de servicios en campo. ¿Te gustaría verlo en una reunión corta con un asesor? Responde Sí y te enviamos los horarios. [Plantilla de WhatsApp con botón "Sí, me interesa"]';
+const pendientes = $('Pendientes de plantilla').all().map((i) => i.json).filter((p) => p.lead_id);
+const respuestas = $input.all().map((i) => leerKommo(i.json));
+const leads = new Map(respuestas.flatMap((r) => (r._embedded && r._embedded.leads) || []).map((l) => [Number(l.id), l]));
+const eventos = respuestas.flatMap((r) => (r._embedded && r._embedded.events) || []);
+const salida = [];
+for (const p of pendientes) {
+  const lead = leads.get(Number(p.lead_id));
+  if (!lead || !ETAPAS_AGENTE.has(Number(lead.status_id))) continue;
+  const etiquetas = etiquetasDe(lead);
+  if (etiquetas.includes('Atender persona') || etiquetas.includes('Agente pausado')) continue;
+  const desde = new Date(p.ult_seguimiento).getTime() / 1000 + 120;
+  if (eventos.some((e) => Number(e.entity_id) === Number(p.lead_id) && Number(e.created_at) > desde)) continue;
+  salida.push({ json: { lead_id: lead.id,
+    bot: [{ bot_id: BOT_PLANTILLA, entity_id: lead.id, entity_type: 2 }],
+    guardar: { lead_id: lead.id, rol: 'agente', tipo: 'plantilla', texto: TEXTO, momento: new Date().toISOString() } } });
+}
+return salida;
+
+// == Pedidos recordatorio (Code, una vez para todos los elementos)
+// Recordatorio de reunión (plantilla "Recordatorio de reunión WIP", Salesbot __BOT_RECORDATORIO__): de 7 a. m. a 7 p. m. pide a
+// Calendly las citas de hoy que empiezan en más de 45 minutos (sale de "Usuario Calendly", que ya consulta F2).
+const usuario = ($input.first().json.resource || {}).uri;
+const hora = Number(new Intl.DateTimeFormat('en-US', { timeZone: 'America/Bogota', hour: 'numeric', hourCycle: 'h23' }).format(new Date()));
+if (!usuario || hora < 7 || hora >= 19) return [];
+const hoy = new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Bogota' }).format(new Date());
+const desde = new Date(Date.now() + 45 * 60000).toISOString();
+const hasta = new Date(`${hoy}T23:59:59-05:00`).toISOString();
+return [{ json: { url: `https://api.calendly.com/scheduled_events?user=${encodeURIComponent(usuario)}&status=active&count=100&min_start_time=${encodeURIComponent(desde)}&max_start_time=${encodeURIComponent(hasta)}` } }];
+
+// == Armar recordatorios (Code, una vez para todos los elementos)
+// Cruza las citas de hoy con las que F2 ya pasó a Kommo (calendly_kommo, sin recordatorio) y arma un envío por oportunidad.
+const BOT_RECORDATORIO = __BOT_RECORDATORIO__;
+const citas = ($('Citas de hoy (recordatorio)').first().json.collection || []);
+const registro = $input.all().map((i) => i.json).filter((r) => r.evento && r.kommo_lead_id);
+const hora = new Intl.DateTimeFormat('es-CO', { timeZone: 'America/Bogota', timeStyle: 'short' });
+const vistos = new Set();
+const salida = [];
+for (const c of citas) {
+  for (const r of registro.filter((x) => x.evento === c.uri)) {
+    if (vistos.has(r.kommo_lead_id)) continue;
+    vistos.add(r.kommo_lead_id);
+    salida.push({ json: { lead_id: r.kommo_lead_id, evento: c.uri,
+      bot: [{ bot_id: BOT_RECORDATORIO, entity_id: r.kommo_lead_id, entity_type: 2 }],
+      marcar: { recordatorio: new Date().toISOString() },
+      guardar: { lead_id: r.kommo_lead_id, rol: 'agente', tipo: 'recordatorio', momento: new Date().toISOString(),
+        texto: `Hola ✋ Te recordamos tu reunión con WIP de hoy (${hora.format(new Date(c.start_time))}). Si necesitas cambiar el horario, responde este mensaje. [Plantilla de WhatsApp]` } } });
+  }
+}
+return salida;

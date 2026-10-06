@@ -1454,6 +1454,387 @@
           "name": "Kommo (lectura)"
         }
       }
+    },
+    {
+      "id": "a1f0c0de-0421-4000-8000-000000000421",
+      "name": "Trabajos plantilla",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        260,
+        1900
+      ],
+      "parameters": {
+        "jsCode": "// Segundo seguimiento con la plantilla \"Retomar contacto WIP\" (Salesbot 16850): de lunes a viernes, de 9 a. m. a 6 p. m.\n// La vista trae a quien recibió el primer seguimiento hace 2 a 5 días y no respondió.\nconst SUPABASE = 'https://tlpnkcroqenudzgiqzum.supabase.co';\nconst ahora = new Date();\nconst hora = Number(new Intl.DateTimeFormat('en-US', { timeZone: 'America/Bogota', hour: 'numeric', hourCycle: 'h23' }).format(ahora));\nconst dia = new Intl.DateTimeFormat('en-US', { timeZone: 'America/Bogota', weekday: 'short' }).format(ahora);\nif (hora < 9 || hora >= 18 || dia === 'Sat' || dia === 'Sun') return [];\nreturn [{ json: { url: `${SUPABASE}/rest/v1/agente_plantilla_pendiente?select=lead_id,ult_seguimiento` } }];\n"
+      }
+    },
+    {
+      "id": "a1f0c0de-0422-4000-8000-000000000422",
+      "name": "Pendientes de plantilla",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        420,
+        1900
+      ],
+      "parameters": {
+        "method": "GET",
+        "url": "={{ $json.url }}",
+        "options": {
+          "batching": {
+            "batch": {
+              "batchSize": 1,
+              "batchInterval": 300
+            }
+          }
+        },
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth"
+      },
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "us3OmK2VUvuuu7t8",
+          "name": "Supabase (tablero)"
+        }
+      }
+    },
+    {
+      "id": "a1f0c0de-0423-4000-8000-000000000423",
+      "name": "Pedidos Kommo plantilla",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        580,
+        1900
+      ],
+      "parameters": {
+        "jsCode": "// Las oportunidades pendientes y hasta 6 páginas de mensajes enviados en los últimos 5 días (para ver si escribió alguien del equipo).\nconst ids = $input.all().map((i) => i.json.lead_id).filter(Boolean);\nif (!ids.length) return [];\nconst K = 'https://wiptool.kommo.com/api/v4';\nconst desde = Math.floor(Date.now() / 1000) - 5 * 86400;\nreturn [\n  { json: { url: `${K}/leads?${ids.map((id) => 'filter[id][]=' + id).join('&')}&limit=250` } },\n  ...[1, 2, 3, 4, 5, 6].map((p) => ({ json: { url: `${K}/events?filter[type][]=outgoing_chat_message&filter[created_at][from]=${desde}&limit=100&page=${p}` } })),\n];\n"
+      }
+    },
+    {
+      "id": "a1f0c0de-0424-4000-8000-000000000424",
+      "name": "Consultar Kommo (plantilla)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        740,
+        1900
+      ],
+      "parameters": {
+        "method": "GET",
+        "url": "={{ $json.url }}",
+        "options": {
+          "batching": {
+            "batch": {
+              "batchSize": 1,
+              "batchInterval": 300
+            }
+          }
+        },
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth"
+      },
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "wxfP9VZK9UBkShIS",
+          "name": "Kommo (lectura)"
+        }
+      },
+      "alwaysOutputData": true,
+      "onError": "continueRegularOutput"
+    },
+    {
+      "id": "a1f0c0de-0425-4000-8000-000000000425",
+      "name": "Armar plantillas",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        900,
+        1900
+      ],
+      "parameters": {
+        "jsCode": "// Solo prospectos (Leads entrantes o Nuevo) sin \"Atender persona\"/\"Agente pausado\" y sin mensajes del equipo después del\n// primer seguimiento (cualquier mensaje enviado más de 2 minutos después de ese seguimiento lo escribió una persona).\nconst ETAPAS_AGENTE = new Set([112413247, 112413251]); // Leads entrantes y Nuevo\nconst ORIGEN_UTM = { 'Meta Ads': 'meta_ads', Instagram: 'instagram', Facebook: 'facebook', Explee: 'explee', 'Correo (Brevo)': 'brevo',\n  'Sitio web': 'sitio_web', 'Google Ads': 'google', LinkedIn: 'linkedin', Referido: 'referido', 'App sin app': 'app_sin_app' };\n// Kommo responde application/hal+json y el nodo HTTP lo deja como texto en data; las páginas vacías llegan sin cuerpo (204).\nconst leerKommo = (j) => { if (j && typeof j.data === 'string') { try { return JSON.parse(j.data); } catch (e) { return {}; } } return j || {}; };\nconst etiquetasDe = (lead) => ((lead._embedded && lead._embedded.tags) || []).map((t) => t.name);\n// Mensajes que salieron por WhatsApp (eventos outgoing_chat_message de Kommo) contra respuestas del agente en las últimas 24 h:\n// si salieron más, alguien del equipo escribió (desde Kommo o desde la app de WhatsApp Business del celular) y el agente no se mete.\nconst personaEscribio = (enviados, historial) => {\n  const desde = Date.now() - 24 * 3600 * 1000;\n  const delAgente = historial.filter((h) => h.rol === 'agente' && h.tipo !== 'sin_seguimiento' && new Date(h.momento).getTime() > desde).length;\n  return enviados > delAgente;\n};\n// Contexto de la conversación para Claude: origen, anuncio que vio, enlaces medidos por plataforma y agenda.\nconst contextoAgente = (lead, anuncio) => {\n  const campo = (n) => { const f = (lead.custom_fields_values || []).find((x) => x.field_name === n); return f && f.values[0] ? String(f.values[0].value) : ''; };\n  const utm = (code) => { const f = (lead.custom_fields_values || []).find((x) => x.field_code === code); return f && f.values[0] ? String(f.values[0].value) : ''; };\n  // Si el campo Origen está vacío pero el chat trae utm_source=meta_ads (parámetros de los anuncios), es Meta Ads.\n  const origen = campo('Origen') || (utm('UTM_SOURCE') === 'meta_ads' ? 'Meta Ads' : '');\n  // Anuncio que vio la persona (texto desde meta_anuncio) y plataforma, si Meta la reemplazó en utm_term.\n  const plataforma = { fb: 'Facebook', facebook: 'Facebook', ig: 'Instagram', instagram: 'Instagram', msg: 'Messenger', an: 'Audience Network' }[utm('UTM_TERM').toLowerCase()] || '';\n  const lineaAnuncio = utm('UTM_CONTENT')\n    ? `- Llegó por un anuncio de Meta${plataforma ? ' en ' + plataforma : ''}${anuncio ? '. Texto del anuncio: «' + anuncio.texto + '»' : ' (no tengo el texto del anuncio)'}. Úsalo para entender qué le interesó; no menciones nombres internos de campañas ni de anuncios.`\n    : '';\n  const campanaKommo = campo('Campaña');\n  // Enlaces al sitio medidos con la plataforma de donde viene la persona (accionadores; redirects en vercel.json de landing-wip).\n  const W = 'https://www.wiptool.com';\n  const ENLACES = {\n    Instagram: { portada: W + '/ig', equipos: W + '/equipos/ig', planes: W + '/planes/ig' },\n    Facebook: { portada: W + '/fb', equipos: W + '/equipos/fb', planes: W + '/planes/fb' },\n    'Meta Ads': { portada: W + '/meta', equipos: W + '/equipos/meta', planes: W + '/planes/meta' },\n    Explee: { portada: W + '/explee', equipos: W + '/equipos/explee', planes: W + '/planes/explee' },\n    'Correo (Brevo)': { portada: W + '/email', equipos: W + '/equipos/email', planes: W + '/planes/email' },\n  };\n  const enlaces = ENLACES[origen] || { portada: W, equipos: W + '/equipos', planes: W + '/equipos#planes' };\n  // Agenda medida por plataforma (registra el clic en Analytics y pasa a Calendly con UTM); c=kommo-<id> hace que la cita mueva esta oportunidad.\n  const AGENDA = { Instagram: '/agenda-ig', Facebook: '/agenda-fb', 'Meta Ads': '/agenda-meta', Explee: '/agenda-explee', 'Correo (Brevo)': '/agenda-email' };\n  const agenda = `https://calendly.com/comercial-wiptool/acercamiento-wip?utm_source=${ORIGEN_UTM[origen] || 'whatsapp'}&utm_medium=chat&utm_content=kommo-${lead.id}`;\n  const agendaMedida = AGENDA[origen] ? `${W}${AGENDA[origen]}?c=kommo-${lead.id}` : agenda;\n  const hoy = new Intl.DateTimeFormat('es-CO', { timeZone: 'America/Bogota', dateStyle: 'full', timeStyle: 'short' }).format(new Date());\n  const texto = `# Contexto de esta conversación\n- Fecha y hora en Colombia: ${hoy}\n- La persona llegó por: ${origen || 'origen desconocido'}${campanaKommo && !utm('UTM_CONTENT') ? ' (campaña: ' + campanaKommo + ')' : ''}\n${lineaAnuncio ? lineaAnuncio + '\\n' : ''}- Enlace para agendar la reunión (úsalo tal cual): ${agendaMedida}\n- Enlaces al sitio para esta persona (úsalos tal cual): portada y WIP Redes ${enlaces.portada} · WIP Equipos ${enlaces.equipos} · planes de WIP Equipos ${enlaces.planes}`;\n  return { origen, texto };\n};\n// Historial en formato de Claude: cliente → user, agente → assistant; mensajes seguidos del mismo rol se juntan.\nconst mensajesClaude = (historial) => {\n  const mensajes = [];\n  for (const h of historial.slice(-30)) {\n    const role = h.rol === 'agente' ? 'assistant' : 'user';\n    const ult = mensajes[mensajes.length - 1];\n    if (ult && ult.role === role) ult.content += '\\n' + h.texto; else mensajes.push({ role, content: h.texto });\n  }\n  if (!mensajes.length || mensajes[0].role !== 'user') mensajes.unshift({ role: 'user', content: '(inicio de la conversación)' });\n  return mensajes;\n};\n// Kommo borra los emojis de 4 bytes (👋 📅 🙌…) al guardar el campo que envía el Salesbot: se cambian por equivalentes que sí\n// pasan (✋ ⏰ ✨ ✅ ➡️ ⚡ ☎️) y los demás se quitan, para que no queden espacios dobles.\nconst EMOJIS = { '👋': '✋', '🙋': '✋', '📅': '⏰', '🗓️': '⏰', '🗓': '⏰', '📆': '⏰', '🙌': '✨', '😊': '✨', '🙂': '✨', '😃': '✨', '💪': '✨',\n  '👍': '✅', '👌': '✅', '👉': '➡️', '📍': '➡️', '🚀': '⚡', '🔥': '⚡', '📞': '☎️', '💬': '✨', '📊': '✅', '🚚': '⚡' };\nconst limpiarTexto = (t) => Object.entries(EMOJIS).reduce((s, [a, b]) => s.split(a).join(b), String(t || ''))\n  .replace(/\\*\\*?|__|^#+\\s*/gm, '').replace(/[\\u{10000}-\\u{10FFFF}]️?/gu, '').replace(/[ \\t]{2,}/g, ' ').replace(/ ([.,!?])/g, '$1')\n  .trim().slice(0, 1500);\nconst BOT_PLANTILLA = 16850;\nconst TEXTO = 'Hola ✋ Te escribimos de WIP por tu consulta sobre la gestión de servicios en campo. ¿Te gustaría verlo en una reunión corta con un asesor? Responde Sí y te enviamos los horarios. [Plantilla de WhatsApp con botón \"Sí, me interesa\"]';\nconst pendientes = $('Pendientes de plantilla').all().map((i) => i.json).filter((p) => p.lead_id);\nconst respuestas = $input.all().map((i) => leerKommo(i.json));\nconst leads = new Map(respuestas.flatMap((r) => (r._embedded && r._embedded.leads) || []).map((l) => [Number(l.id), l]));\nconst eventos = respuestas.flatMap((r) => (r._embedded && r._embedded.events) || []);\nconst salida = [];\nfor (const p of pendientes) {\n  const lead = leads.get(Number(p.lead_id));\n  if (!lead || !ETAPAS_AGENTE.has(Number(lead.status_id))) continue;\n  const etiquetas = etiquetasDe(lead);\n  if (etiquetas.includes('Atender persona') || etiquetas.includes('Agente pausado')) continue;\n  const desde = new Date(p.ult_seguimiento).getTime() / 1000 + 120;\n  if (eventos.some((e) => Number(e.entity_id) === Number(p.lead_id) && Number(e.created_at) > desde)) continue;\n  salida.push({ json: { lead_id: lead.id,\n    bot: [{ bot_id: BOT_PLANTILLA, entity_id: lead.id, entity_type: 2 }],\n    guardar: { lead_id: lead.id, rol: 'agente', tipo: 'plantilla', texto: TEXTO, momento: new Date().toISOString() } } });\n}\nreturn salida;\n"
+      }
+    },
+    {
+      "id": "a1f0c0de-0426-4000-8000-000000000426",
+      "name": "Guardar plantilla",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1060,
+        1900
+      ],
+      "parameters": {
+        "method": "POST",
+        "url": "https://tlpnkcroqenudzgiqzum.supabase.co/rest/v1/agente_mensajes",
+        "options": {
+          "batching": {
+            "batch": {
+              "batchSize": 1,
+              "batchInterval": 300
+            }
+          }
+        },
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Prefer",
+              "value": "return=minimal"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify($json.guardar) }}"
+      },
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "us3OmK2VUvuuu7t8",
+          "name": "Supabase (tablero)"
+        }
+      }
+    },
+    {
+      "id": "a1f0c0de-0427-4000-8000-000000000427",
+      "name": "Enviar plantilla por WhatsApp",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1220,
+        1900
+      ],
+      "parameters": {
+        "method": "POST",
+        "url": "https://wiptool.kommo.com/api/v2/salesbot/run",
+        "options": {
+          "batching": {
+            "batch": {
+              "batchSize": 1,
+              "batchInterval": 300
+            }
+          }
+        },
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify($('Armar plantillas').item.json.bot) }}"
+      },
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "wxfP9VZK9UBkShIS",
+          "name": "Kommo (lectura)"
+        }
+      }
+    },
+    {
+      "id": "a1f0c0de-0501-4000-8000-000000000501",
+      "name": "Pedidos recordatorio",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        580,
+        2100
+      ],
+      "parameters": {
+        "jsCode": "// Recordatorio de reunión (plantilla \"Recordatorio de reunión WIP\", Salesbot 16852): de 7 a. m. a 7 p. m. pide a\n// Calendly las citas de hoy que empiezan en más de 45 minutos (sale de \"Usuario Calendly\", que ya consulta F2).\nconst usuario = ($input.first().json.resource || {}).uri;\nconst hora = Number(new Intl.DateTimeFormat('en-US', { timeZone: 'America/Bogota', hour: 'numeric', hourCycle: 'h23' }).format(new Date()));\nif (!usuario || hora < 7 || hora >= 19) return [];\nconst hoy = new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Bogota' }).format(new Date());\nconst desde = new Date(Date.now() + 45 * 60000).toISOString();\nconst hasta = new Date(`${hoy}T23:59:59-05:00`).toISOString();\nreturn [{ json: { url: `https://api.calendly.com/scheduled_events?user=${encodeURIComponent(usuario)}&status=active&count=100&min_start_time=${encodeURIComponent(desde)}&max_start_time=${encodeURIComponent(hasta)}` } }];\n"
+      }
+    },
+    {
+      "id": "a1f0c0de-0502-4000-8000-000000000502",
+      "name": "Citas de hoy (recordatorio)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        740,
+        2100
+      ],
+      "parameters": {
+        "method": "GET",
+        "url": "={{ $json.url }}",
+        "options": {
+          "batching": {
+            "batch": {
+              "batchSize": 1,
+              "batchInterval": 300
+            }
+          }
+        },
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth"
+      },
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "0U9bkwTaH0qwcc9h",
+          "name": "Calendly (lectura)"
+        }
+      }
+    },
+    {
+      "id": "a1f0c0de-0503-4000-8000-000000000503",
+      "name": "Registro citas (recordatorio)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        900,
+        2100
+      ],
+      "parameters": {
+        "method": "GET",
+        "url": "https://tlpnkcroqenudzgiqzum.supabase.co/rest/v1/calendly_kommo?select=evento,kommo_lead_id&recordatorio=is.null&kommo_lead_id=not.is.null",
+        "options": {
+          "batching": {
+            "batch": {
+              "batchSize": 1,
+              "batchInterval": 300
+            }
+          }
+        },
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth"
+      },
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "us3OmK2VUvuuu7t8",
+          "name": "Supabase (tablero)"
+        }
+      },
+      "executeOnce": true,
+      "alwaysOutputData": true
+    },
+    {
+      "id": "a1f0c0de-0504-4000-8000-000000000504",
+      "name": "Armar recordatorios",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1060,
+        2100
+      ],
+      "parameters": {
+        "jsCode": "// Cruza las citas de hoy con las que F2 ya pasó a Kommo (calendly_kommo, sin recordatorio) y arma un envío por oportunidad.\nconst BOT_RECORDATORIO = 16852;\nconst citas = ($('Citas de hoy (recordatorio)').first().json.collection || []);\nconst registro = $input.all().map((i) => i.json).filter((r) => r.evento && r.kommo_lead_id);\nconst hora = new Intl.DateTimeFormat('es-CO', { timeZone: 'America/Bogota', timeStyle: 'short' });\nconst vistos = new Set();\nconst salida = [];\nfor (const c of citas) {\n  for (const r of registro.filter((x) => x.evento === c.uri)) {\n    if (vistos.has(r.kommo_lead_id)) continue;\n    vistos.add(r.kommo_lead_id);\n    salida.push({ json: { lead_id: r.kommo_lead_id, evento: c.uri,\n      bot: [{ bot_id: BOT_RECORDATORIO, entity_id: r.kommo_lead_id, entity_type: 2 }],\n      marcar: { recordatorio: new Date().toISOString() },\n      guardar: { lead_id: r.kommo_lead_id, rol: 'agente', tipo: 'recordatorio', momento: new Date().toISOString(),\n        texto: `Hola ✋ Te recordamos tu reunión con WIP de hoy (${hora.format(new Date(c.start_time))}). Si necesitas cambiar el horario, responde este mensaje. [Plantilla de WhatsApp]` } } });\n  }\n}\nreturn salida;\n"
+      }
+    },
+    {
+      "id": "a1f0c0de-0505-4000-8000-000000000505",
+      "name": "Marcar recordatorio",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1220,
+        2100
+      ],
+      "parameters": {
+        "method": "PATCH",
+        "url": "=https://tlpnkcroqenudzgiqzum.supabase.co/rest/v1/calendly_kommo?evento=eq.{{ encodeURIComponent($json.evento) }}",
+        "options": {
+          "batching": {
+            "batch": {
+              "batchSize": 1,
+              "batchInterval": 300
+            }
+          }
+        },
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Prefer",
+              "value": "return=minimal"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify($json.marcar) }}"
+      },
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "us3OmK2VUvuuu7t8",
+          "name": "Supabase (tablero)"
+        }
+      }
+    },
+    {
+      "id": "a1f0c0de-0506-4000-8000-000000000506",
+      "name": "Guardar recordatorio",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1380,
+        2100
+      ],
+      "parameters": {
+        "method": "POST",
+        "url": "https://tlpnkcroqenudzgiqzum.supabase.co/rest/v1/agente_mensajes",
+        "options": {
+          "batching": {
+            "batch": {
+              "batchSize": 1,
+              "batchInterval": 300
+            }
+          }
+        },
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Prefer",
+              "value": "return=minimal"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify($('Armar recordatorios').item.json.guardar) }}"
+      },
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "us3OmK2VUvuuu7t8",
+          "name": "Supabase (tablero)"
+        }
+      }
+    },
+    {
+      "id": "a1f0c0de-0507-4000-8000-000000000507",
+      "name": "Enviar recordatorio por WhatsApp",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1540,
+        2100
+      ],
+      "parameters": {
+        "method": "POST",
+        "url": "https://wiptool.kommo.com/api/v2/salesbot/run",
+        "options": {
+          "batching": {
+            "batch": {
+              "batchSize": 1,
+              "batchInterval": 300
+            }
+          }
+        },
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify($('Armar recordatorios').item.json.bot) }}"
+      },
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "wxfP9VZK9UBkShIS",
+          "name": "Kommo (lectura)"
+        }
+      }
     }
   ],
   "connections": {
@@ -1502,6 +1883,11 @@
           },
           {
             "node": "Trabajos seguimiento",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Trabajos plantilla",
             "type": "main",
             "index": 0
           }
@@ -1555,6 +1941,11 @@
             "node": "Trabajos seguimiento",
             "type": "main",
             "index": 0
+          },
+          {
+            "node": "Trabajos plantilla",
+            "type": "main",
+            "index": 0
           }
         ]
       ]
@@ -1575,6 +1966,11 @@
         [
           {
             "node": "Pedidos Calendly",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Pedidos recordatorio",
             "type": "main",
             "index": 0
           }
@@ -1883,6 +2279,138 @@
         [
           {
             "node": "Enviar seguimiento por WhatsApp",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Trabajos plantilla": {
+      "main": [
+        [
+          {
+            "node": "Pendientes de plantilla",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Pendientes de plantilla": {
+      "main": [
+        [
+          {
+            "node": "Pedidos Kommo plantilla",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Pedidos Kommo plantilla": {
+      "main": [
+        [
+          {
+            "node": "Consultar Kommo (plantilla)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Consultar Kommo (plantilla)": {
+      "main": [
+        [
+          {
+            "node": "Armar plantillas",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Armar plantillas": {
+      "main": [
+        [
+          {
+            "node": "Guardar plantilla",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Guardar plantilla": {
+      "main": [
+        [
+          {
+            "node": "Enviar plantilla por WhatsApp",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Pedidos recordatorio": {
+      "main": [
+        [
+          {
+            "node": "Citas de hoy (recordatorio)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Citas de hoy (recordatorio)": {
+      "main": [
+        [
+          {
+            "node": "Registro citas (recordatorio)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Registro citas (recordatorio)": {
+      "main": [
+        [
+          {
+            "node": "Armar recordatorios",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Armar recordatorios": {
+      "main": [
+        [
+          {
+            "node": "Marcar recordatorio",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Marcar recordatorio": {
+      "main": [
+        [
+          {
+            "node": "Guardar recordatorio",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Guardar recordatorio": {
+      "main": [
+        [
+          {
+            "node": "Enviar recordatorio por WhatsApp",
             "type": "main",
             "index": 0
           }
