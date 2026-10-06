@@ -25,6 +25,7 @@
   --lime-ink: #3f7a12;
   --serie-1: #2a78d6;
   --serie-2: #eb6834;
+  --serie-3: #7b55c7;
   --bueno: #1c7c45;
   --malo: #c23b31;
   --aviso: #a86a00;
@@ -47,6 +48,7 @@
   --lime-ink: #d3fb4f;
   --serie-1: #3987e5;
   --serie-2: #d95926;
+  --serie-3: #a183e6;
   --bueno: #4cc47e;
   --malo: #f06b60;
   --aviso: #e0a33a;
@@ -71,6 +73,7 @@
   --color-navy: #161d31;
   --color-serie-1: var(--serie-1);
   --color-serie-2: var(--serie-2);
+  --color-serie-3: var(--serie-3);
   --color-bueno: var(--bueno);
   --color-malo: var(--malo);
   --color-aviso: var(--aviso);

@@ -263,16 +263,17 @@ demo.tablero_embudo = embudo;
 
 // F7: agente de WhatsApp (ejemplo).
 function agente({ p_desde, p_hasta }) {
-  const serie = dias(p_desde, p_hasta).map((fecha) => { const x = azar('a' + fecha)(); return { fecha, conversaciones: Math.round(2 + x * 6), respuestas: Math.round(4 + x * 14) }; });
+  const serie = dias(p_desde, p_hasta).map((fecha) => { const x = azar('a' + fecha)(); return { fecha, conversaciones: Math.round(2 + x * 6), respuestas: Math.round(4 + x * 14), seguimientos: Math.round(x * 3) }; });
   const conversaciones = serie.reduce((a, x) => a + x.conversaciones, 0), respuestas = serie.reduce((a, x) => a + x.respuestas, 0);
   const atendidas = Math.round(conversaciones * 0.9);
   return {
     kpis: { atendidas, atendidas_ant: Math.round(atendidas * 0.8), recibidos: respuestas + conversaciones, recibidos_ant: respuestas, respuestas, respuestas_ant: Math.round(respuestas * 0.8),
-      traspasos: Math.round(atendidas * 0.15), traspasos_ant: 2, reuniones: Math.round(atendidas * 0.2), reuniones_ant: 3, conversaciones, conversaciones_ant: Math.round(conversaciones * 0.8) },
+      traspasos: Math.round(atendidas * 0.15), traspasos_ant: 2, reuniones: Math.round(atendidas * 0.2), reuniones_ant: 3, conversaciones, conversaciones_ant: Math.round(conversaciones * 0.8),
+      seguimientos: Math.round(atendidas * 0.4), seguimientos_ant: 4, reactivadas: Math.round(atendidas * 0.12), reactivadas_ant: 1 },
     serie,
     conversaciones: [
-      { lead_id: 1, nombre: 'Grúas del Norte', origen: 'Meta Ads', etapa: 'Reunión agendada', recibidos: 6, respuestas: 5, traspaso: 'No', ultimo_mensaje: 'Listo, agendé para el jueves', ultimo: p_hasta + 'T15:20:00Z', kommo: 'https://wiptool.kommo.com/leads/detail/1' },
-      { lead_id: 2, nombre: 'Asistencias Andinas', origen: 'Instagram', etapa: 'Nuevo', recibidos: 3, respuestas: 2, traspaso: 'Sí', ultimo_mensaje: 'Prefiero que me llame un asesor', ultimo: p_hasta + 'T11:05:00Z', kommo: 'https://wiptool.kommo.com/leads/detail/2' },
+      { lead_id: 1, nombre: 'Grúas del Norte', origen: 'Meta Ads', etapa: 'Reunión agendada', recibidos: 6, respuestas: 5, traspaso: 'No', seguimiento: 'Respondió', ultimo_mensaje: 'Listo, agendé para el jueves', ultimo: p_hasta + 'T15:20:00Z', kommo: 'https://wiptool.kommo.com/leads/detail/1' },
+      { lead_id: 2, nombre: 'Asistencias Andinas', origen: 'Instagram', etapa: 'Nuevo', recibidos: 3, respuestas: 2, traspaso: 'Sí', seguimiento: 'No', ultimo_mensaje: 'Prefiero que me llame un asesor', ultimo: p_hasta + 'T11:05:00Z', kommo: 'https://wiptool.kommo.com/leads/detail/2' },
     ],
     por_origen: [{ origen: 'Meta Ads', atendidas: Math.round(atendidas * 0.8), reuniones: Math.round(atendidas * 0.15), traspasos: 2 }, { origen: 'Instagram', atendidas: Math.round(atendidas * 0.2), reuniones: 1, traspasos: 1 }],
   };

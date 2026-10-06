@@ -5,7 +5,7 @@
 //  - f14-google-ads.json:    recibe lo que envía el script de Google Ads y lo guarda en Supabase.
 //  - f15-formularios-kommo.json: recibe los formularios del sitio (/api/contact) y los crea en Kommo con su Origen (F1).
 //  - f16-agente-whatsapp.json: agente de WhatsApp con Claude (F7); lo llama el webhook de Kommo "mensaje entrante".
-//    Necesita CRED_CLAUDE=<id de la credencial Anthropic "Claude (agente WhatsApp)">.
+//    Necesita CRED_CLAUDE=<id de la credencial Anthropic "Claude (agente WhatsApp)">; con ella F12 también lleva el agente de seguimiento.
 // Uso: AGENTE_EN_VIVO=1 CRED_CALENDLY=0U9bkwTaH0qwcc9h CRED_CLAUDE=lI6pyiToLgn65AwG node n8n/armar-flujo.cjs  (ids de las credenciales "Calendly (lectura)" y "Claude (agente WhatsApp)" en n8n)
 // Las credenciales se referencian por id (se crean a mano en n8n; las claves nunca van en este repositorio).
 const fs = require('fs');
@@ -63,6 +63,8 @@ const SITIO = partes('sitio-calendly.js');
 const AGENTE = partes('agente.js');
 const ANUNCIOS = partes('anuncios-meta.js');
 const INSTRUCCIONES = leer('agente-instrucciones.md').trim().replace(/\\/g, '\\\\').replace(/`/g, '\\`').replace(/\$\{/g, '\\${');
+// Parte común del agente (contexto, enlaces, limpieza de emojis…) que se pega en los nodos con __COMUN__.
+const conComun = (js) => js.split('__COMUN__').join(AGENTE['Común del agente'].trim());
 const codigoTexto = (id, name, posicion, js) => ({ id, name, type: 'n8n-nodes-base.code', typeVersion: 2, position: posicion, parameters: { jsCode: js } });
 const http = (id, name, posicion, extra) => ({
   id, name, type: 'n8n-nodes-base.httpRequest', typeVersion: 4.2, position: posicion,
@@ -144,7 +146,42 @@ const ANUNCIOS_META = {
   ],
   conexiones: { 'Trabajos anuncios Meta': a('Consultar anuncios Meta'), 'Consultar anuncios Meta': a('Filas anuncios Meta'), 'Filas anuncios Meta': a('Guardar en Supabase') },
 };
-const ARRANQUE = [...INICIOS.slice(0, -1), 'Trabajos anuncios Meta', ...F2.inicio, INICIOS[INICIOS.length - 1]];
+// Agente de seguimiento: cada hora (8 a. m. a 8 p. m.) le escribe una vez más a quien dejó de responder al agente de WhatsApp,
+// dentro de la ventana de 24 h. Necesita CRED_CLAUDE. Va en F12 para no gastar ejecuciones de n8n en un flujo aparte.
+const SEGUIMIENTO = (() => {
+  if (!CRED_CLAUDE) return { nodos: [], conexiones: {}, inicio: [] };
+  const id = (k) => `a1f0c0de-04${String(k).padStart(2, '0')}-4000-8000-0000000004${String(k).padStart(2, '0')}`;
+  const auth = { authentication: 'genericCredentialType', genericAuthType: 'httpHeaderAuth' };
+  const cuerpo = (expr) => ({ sendBody: true, specifyBody: 'json', jsonBody: `={{ JSON.stringify(${expr}) }}` });
+  const preparar = (js) => conComun(js).split('__SUPABASE__').join(SUPABASE).split('__INSTRUCCIONES__').join(INSTRUCCIONES)
+    .split('__CAMPO_RESPUESTA__').join(String(CAMPO_RESPUESTA)).split('__BOT_RESPUESTA__').join(String(BOT_RESPUESTA));
+  const y = 1700;
+  const nodos = [
+    codigoTexto(id(1), 'Trabajos seguimiento', [260, y], preparar(AGENTE['Trabajos seguimiento'])),
+    http(id(2), 'Pendientes de seguimiento', [420, y], { parameters: auth, credentials: CRED.supabase }),
+    codigoTexto(id(3), 'Pedidos Kommo seguimiento', [580, y], preparar(AGENTE['Pedidos Kommo seguimiento'])),
+    { ...http(id(4), 'Consultar Kommo (seguimiento)', [740, y], { parameters: auth, credentials: CRED.kommo }), alwaysOutputData: true, onError: 'continueRegularOutput' },
+    codigoTexto(id(5), 'Armar seguimientos', [900, y], preparar(AGENTE['Armar seguimientos'])),
+    http(id(6), 'Claude (seguimiento)', [1060, y], { parameters: { method: 'POST', url: 'https://api.anthropic.com/v1/messages',
+      authentication: 'predefinedCredentialType', nodeCredentialType: 'anthropicApi',
+      sendHeaders: true, headerParameters: { parameters: [{ name: 'anthropic-version', value: '2023-06-01' }] }, ...cuerpo('$json.pedido') },
+      credentials: CRED_CLAUDE }),
+    { id: id(7), name: 'Seguimiento de Claude', type: 'n8n-nodes-base.code', typeVersion: 2, position: [1220, y],
+      parameters: { mode: 'runOnceForEachItem', jsCode: preparar(AGENTE['Seguimiento de Claude']) } },
+    http(id(8), 'Guardar seguimiento', [1380, y], { parameters: { method: 'POST', url: `${SUPABASE}/rest/v1/agente_mensajes`, ...auth,
+      sendHeaders: true, headerParameters: { parameters: [{ name: 'Prefer', value: 'return=minimal' }] }, ...cuerpo('$json.guardar') },
+      credentials: CRED.supabase }),
+    codigoTexto(id(9), 'Solo los que se envían', [1540, y], "return $('Seguimiento de Claude').all().filter((i) => i.json.enviar).map((i) => ({ json: i.json }));\n"),
+    http(id(10), 'Escribir seguimiento en Kommo', [1700, y], { parameters: { method: 'PATCH', url: 'https://wiptool.kommo.com/api/v4/leads', ...auth,
+      ...cuerpo('$json.kommo') }, credentials: CRED.kommo }),
+    http(id(11), 'Enviar seguimiento por WhatsApp', [1860, y], { parameters: { method: 'POST', url: 'https://wiptool.kommo.com/api/v2/salesbot/run', ...auth,
+      ...cuerpo("$('Solo los que se envían').item.json.bot") }, credentials: CRED.kommo }),
+  ];
+  const nombres = nodos.map((x) => x.name);
+  const conexiones = Object.fromEntries(nombres.slice(0, -1).map((nm, i) => [nm, a(nombres[i + 1])]));
+  return { nodos, conexiones, inicio: ['Trabajos seguimiento'] };
+})();
+const ARRANQUE = [...INICIOS.slice(0, -1), 'Trabajos anuncios Meta', ...F2.inicio, INICIOS[INICIOS.length - 1], ...SEGUIMIENTO.inicio];
 const f12 = {
   name: 'F12 · Carga del tablero (Google, Meta y TRM → Supabase)',
   nodes: [
@@ -223,12 +260,14 @@ const f12 = {
     guardar('a1f0c0de-0006-4000-8000-000000000006', [1100, 300]),
     ...F2.nodos,
     ...ANUNCIOS_META.nodos,
+    ...SEGUIMIENTO.nodos,
   ],
   connections: {
     'Cada hora': varios(...ARRANQUE),
     'Cargar histórico (a mano)': varios(...ARRANQUE),
     ...F2.conexiones,
     ...ANUNCIOS_META.conexiones,
+    ...SEGUIMIENTO.conexiones,
     'Trabajos Google': a('Consultar Google'), 'Consultar Google': a('Filas Google'), 'Filas Google': a('Guardar en Supabase'),
     'Trabajos Meta': a('Consultar Meta'), 'Consultar Meta': a('Filas Meta'), 'Filas Meta': a('Guardar en Supabase'),
     'Trabajos TRM': a('Consultar TRM'), 'Consultar TRM': a('Filas TRM'), 'Filas TRM': a('Guardar en Supabase'),
@@ -297,18 +336,21 @@ if (CRED_CLAUDE) {
       { id: id(4), name: 'Esperar', type: 'n8n-nodes-base.wait', typeVersion: 1.1, position: [600, 0], webhookId: 'd4f0c0de-0004-4000-8000-0000000c0de8',
         parameters: { amount: 20, unit: 'seconds' } },
       { ...http(id(5), 'Historial', [800, 0], { parameters: {
-        url: `=${SUPABASE}/rest/v1/agente_mensajes?select=rol,texto,mensaje_id,momento&lead_id=eq.{{ $('Mensaje entrante').first().json.lead_id }}&order=momento.desc&limit=40`, ...auth },
+        url: `=${SUPABASE}/rest/v1/agente_mensajes?select=rol,texto,mensaje_id,momento,tipo&tipo=neq.sin_seguimiento&lead_id=eq.{{ $('Mensaje entrante').first().json.lead_id }}&order=momento.desc&limit=40`, ...auth },
         credentials: CRED.supabase }), alwaysOutputData: true },
       { ...http(id(6), 'Lead en Kommo', [1000, 0], { parameters: {
-        url: "=https://wiptool.kommo.com/api/v4/leads/{{ $('Mensaje entrante').first().json.lead_id }}", ...auth }, credentials: CRED.kommo }), executeOnce: true },
+        url: "=https://wiptool.kommo.com/api/v4/leads/{{ $('Mensaje entrante').first().json.lead_id }}?with=contacts", ...auth }, credentials: CRED.kommo }), executeOnce: true },
       codigoTexto(id(17), 'Anuncio a buscar', [1100, 160], AGENTE['Anuncio a buscar'].split('__SUPABASE__').join(SUPABASE)),
       { ...http(id(18), 'Anuncio de Meta', [1150, 0], { parameters: { ...auth }, credentials: CRED.supabase }), alwaysOutputData: true },
-      codigoTexto(id(7), 'Decidir y preguntar a Claude', [1200, 0], AGENTE['Decidir y preguntar a Claude'].split('__INSTRUCCIONES__').join(INSTRUCCIONES).split('__MODO_PRUEBA__').join(String(MODO_PRUEBA))),
+      // Mensajes que salieron por WhatsApp a este contacto en 24 h: si son más que las respuestas del agente, escribió alguien del equipo.
+      { ...http(id(19), 'Mensajes enviados', [1175, 160], { parameters: { url: "={{ $('Anuncio a buscar').first().json.url_enviados }}", ...auth }, credentials: CRED.kommo }),
+        executeOnce: true, alwaysOutputData: true, onError: 'continueRegularOutput' },
+      codigoTexto(id(7), 'Decidir y preguntar a Claude', [1200, 0], conComun(AGENTE['Decidir y preguntar a Claude']).split('__INSTRUCCIONES__').join(INSTRUCCIONES).split('__MODO_PRUEBA__').join(String(MODO_PRUEBA))),
       http(id(8), 'Claude', [1400, 0], { parameters: { method: 'POST', url: 'https://api.anthropic.com/v1/messages',
         authentication: 'predefinedCredentialType', nodeCredentialType: 'anthropicApi',
         sendHeaders: true, headerParameters: { parameters: [{ name: 'anthropic-version', value: '2023-06-01' }] }, ...cuerpoJson('$json.pedido') },
         credentials: CRED_CLAUDE }),
-      codigoTexto(id(9), 'Respuesta de Claude', [1600, 0], AGENTE['Respuesta de Claude']
+      codigoTexto(id(9), 'Respuesta de Claude', [1600, 0], conComun(AGENTE['Respuesta de Claude'])
         .split('__CAMPO_RESPUESTA__').join(String(CAMPO_RESPUESTA)).split('__BOT_RESPUESTA__').join(String(BOT_RESPUESTA))),
       http(id(10), 'Escribir respuesta en Kommo', [1800, 0], { parameters: { method: 'PATCH', url: 'https://wiptool.kommo.com/api/v4/leads', ...auth,
         ...cuerpoJson('$json.kommo') }, credentials: CRED.kommo }),
@@ -326,7 +368,7 @@ if (CRED_CLAUDE) {
     ],
     connections: {
       'Mensaje de Kommo': a('Mensaje entrante'), 'Mensaje entrante': a('Guardar mensaje'), 'Guardar mensaje': a('Esperar'), Esperar: a('Historial'),
-      Historial: a('Lead en Kommo'), 'Lead en Kommo': a('Anuncio a buscar'), 'Anuncio a buscar': a('Anuncio de Meta'), 'Anuncio de Meta': a('Decidir y preguntar a Claude'), 'Decidir y preguntar a Claude': a('Claude'),
+      Historial: a('Lead en Kommo'), 'Lead en Kommo': a('Anuncio a buscar'), 'Anuncio a buscar': a('Anuncio de Meta'), 'Anuncio de Meta': a('Mensajes enviados'), 'Mensajes enviados': a('Decidir y preguntar a Claude'), 'Decidir y preguntar a Claude': a('Claude'),
       Claude: a('Respuesta de Claude'), 'Respuesta de Claude': a('Escribir respuesta en Kommo'), 'Escribir respuesta en Kommo': a('Enviar por WhatsApp'),
       'Enviar por WhatsApp': a('Guardar respuesta'), 'Guardar respuesta': a('Solo si pasa a persona'), 'Solo si pasa a persona': a('Tarea en Kommo'),
       'Tarea en Kommo': a('Nota de traspaso'), 'Nota de traspaso': a('Correo de traspaso'),
