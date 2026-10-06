@@ -77,7 +77,10 @@ const ENLACES = {
   'Correo (Brevo)': { portada: W + '/email', equipos: W + '/equipos/email', planes: W + '/planes/email' },
 };
 const enlaces = ENLACES[origen] || { portada: W, equipos: W + '/equipos', planes: W + '/equipos#planes' };
-const agenda = `https://calendly.com/comercial-wiptool/acercamiento-wip?utm_source=${ORIGEN_UTM[origen] || 'whatsapp'}&utm_medium=agente_whatsapp&utm_content=kommo-${lead.id}`;
+// Agenda medida por plataforma (registra el clic en Analytics y pasa a Calendly con UTM); c=kommo-<id> hace que la cita mueva esta oportunidad.
+const AGENDA = { Instagram: '/agenda-ig', Facebook: '/agenda-fb', 'Meta Ads': '/agenda-meta', Explee: '/agenda-explee', 'Correo (Brevo)': '/agenda-email' };
+const agenda = `https://calendly.com/comercial-wiptool/acercamiento-wip?utm_source=${ORIGEN_UTM[origen] || 'whatsapp'}&utm_medium=chat&utm_content=kommo-${lead.id}`;
+const agendaMedida = AGENDA[origen] ? `${W}${AGENDA[origen]}?c=kommo-${lead.id}` : agenda;
 // Historial en formato de Claude: cliente → user, agente → assistant; mensajes seguidos del mismo rol se juntan.
 const mensajes = [];
 for (const h of historial.slice(-30)) {
@@ -93,7 +96,7 @@ const sistema = `__INSTRUCCIONES__
 # Contexto de esta conversación
 - Fecha y hora en Colombia: ${hoy}
 - La persona llegó por: ${origen || 'origen desconocido'}${campanaKommo && !utm('UTM_CONTENT') ? ' (campaña: ' + campanaKommo + ')' : ''}
-${lineaAnuncio ? lineaAnuncio + '\n' : ''}- Enlace para agendar la reunión (úsalo tal cual): ${agenda}
+${lineaAnuncio ? lineaAnuncio + '\n' : ''}- Enlace para agendar la reunión (úsalo tal cual): ${agendaMedida}
 - Enlaces al sitio para esta persona (úsalos tal cual): portada y WIP Redes ${enlaces.portada} · WIP Equipos ${enlaces.equipos} · planes de WIP Equipos ${enlaces.planes}
 
 # Formato de salida
