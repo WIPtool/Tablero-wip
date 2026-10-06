@@ -3,12 +3,12 @@ import { GraficaPaneles } from '@/componentes/GraficaPaneles';
 import { Tabla } from '@/componentes/Tabla';
 import { pedir, type Seo } from '@/lib/datos';
 import { pct, pos, fechaLarga } from '@/lib/formato';
-import type { Rango } from '@/lib/rango';
+import { paramsPeriodo, type Rango } from '@/lib/rango';
 import { buscarPagina } from '@/lib/paginas';
 
 // Página de SEO para un sitio de la propiedad de Search Console (wiptool.com o platform.wiptool.com).
 export async function PaginaSeo({ id, sitio, rango }: { id: string; sitio: string; rango: Rango }) {
-  const d = await pedir<Seo>('tablero_seo', { p_desde: rango.desde, p_hasta: rango.hasta, p_sitio: sitio });
+  const d = await pedir<Seo>('tablero_seo', { ...paramsPeriodo(rango), p_sitio: sitio });
   const k = d.kpis;
   const ctr = k.impresiones ? (k.clics ?? 0) / k.impresiones : null;
   const ctrAnt = k.impresiones_ant ? (k.clics_ant ?? 0) / k.impresiones_ant : null;

@@ -5,14 +5,14 @@ import { GraficaPaneles } from '@/componentes/GraficaPaneles';
 import { Tabla, type Columna } from '@/componentes/Tabla';
 import { pedir, type Pauta } from '@/lib/datos';
 import { pesos } from '@/lib/formato';
-import { leerRango, type ParametrosBusqueda } from '@/lib/rango';
+import { leerRango, paramsPeriodo, type ParametrosBusqueda } from '@/lib/rango';
 import { buscarPagina } from '@/lib/paginas';
 
 export const metadata: Metadata = { title: 'Pauta' };
 
 export default async function PaginaPauta({ searchParams }: { searchParams: Promise<ParametrosBusqueda> }) {
   const rango = leerRango(await searchParams);
-  const d = await pedir<Pauta>('tablero_pauta', { p_desde: rango.desde, p_hasta: rango.hasta });
+  const d = await pedir<Pauta>('tablero_pauta', paramsPeriodo(rango));
   const k = d.kpis;
   const costoConv = k.conversaciones ? (k.meta ?? 0) / k.conversaciones : null;
   const costoConvAnt = k.conversaciones_ant ? (k.meta_ant ?? 0) / k.conversaciones_ant : null;

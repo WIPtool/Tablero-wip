@@ -64,9 +64,16 @@ export function leerRango(sp: ParametrosBusqueda): Rango {
 }
 
 // El periodo anterior tiene la misma duración y termina el día antes del actual (igual que las funciones SQL).
-export function anterior({ desde, hasta }: { desde: string; hasta: string }) {
+// "Esta semana" se compara con los mismos días de la semana pasada (de lunes al mismo día).
+export function anterior({ desde, hasta, preset }: { desde: string; hasta: string; preset?: Preset }) {
+  if (preset === 'semana') return { desde: sumarDias(desde, -7), hasta: sumarDias(hasta, -7) };
   const n = diasEntre(desde, hasta);
   return { desde: sumarDias(desde, -n), hasta: sumarDias(desde, -1) };
+}
+
+// Parámetros de periodo para las funciones de Supabase: p_comparar solo cuando la comparación no es con los días inmediatamente anteriores.
+export function paramsPeriodo(r: Rango): { p_desde: string; p_hasta: string; p_comparar?: string } {
+  return r.preset === 'semana' ? { p_desde: r.desde, p_hasta: r.hasta, p_comparar: anterior(r).desde } : { p_desde: r.desde, p_hasta: r.hasta };
 }
 
 export const describir = (r: { desde: string; hasta: string }) =>

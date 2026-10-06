@@ -4,7 +4,7 @@ import { GraficaPaneles } from '@/componentes/GraficaPaneles';
 import { Tabla } from '@/componentes/Tabla';
 import { pedir, type Email } from '@/lib/datos';
 import { pct, pesos } from '@/lib/formato';
-import { leerRango, type ParametrosBusqueda } from '@/lib/rango';
+import { leerRango, paramsPeriodo, type ParametrosBusqueda } from '@/lib/rango';
 import { buscarPagina } from '@/lib/paginas';
 
 export const metadata: Metadata = { title: 'Email marketing' };
@@ -13,7 +13,7 @@ const tasa = (a?: number | null, b?: number | null) => (b ? (a ?? 0) / b : null)
 
 export default async function PaginaEmail({ searchParams }: { searchParams: Promise<ParametrosBusqueda> }) {
   const rango = leerRango(await searchParams);
-  const d = await pedir<Email>('tablero_email', { p_desde: rango.desde, p_hasta: rango.hasta });
+  const d = await pedir<Email>('tablero_email', paramsPeriodo(rango));
   const k = d.kpis;
   const clicsCorreos = d.clics_desde_correos.reduce((a, x) => a + x.clics, 0);
   const sinDatos = !k.enviados && !k.enviados_ant && !d.campanas.length;

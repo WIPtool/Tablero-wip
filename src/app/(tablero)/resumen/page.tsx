@@ -4,7 +4,7 @@ import { GraficaPaneles } from '@/componentes/GraficaPaneles';
 import { Tabla } from '@/componentes/Tabla';
 import { pedir, type Resumen, type Inversion } from '@/lib/datos';
 import { pesos } from '@/lib/formato';
-import { leerRango, type ParametrosBusqueda } from '@/lib/rango';
+import { leerRango, paramsPeriodo, type ParametrosBusqueda } from '@/lib/rango';
 import { buscarPagina } from '@/lib/paginas';
 
 export const metadata: Metadata = { title: 'Resumen' };
@@ -17,7 +17,7 @@ const EVENTOS: Record<string, string> = {
 
 export default async function PaginaResumen({ searchParams }: { searchParams: Promise<ParametrosBusqueda> }) {
   const rango = leerRango(await searchParams);
-  const params = { p_desde: rango.desde, p_hasta: rango.hasta };
+  const params = paramsPeriodo(rango);
   const [d, inv] = await Promise.all([pedir<Resumen>('tablero_resumen', params), pedir<Inversion>('tablero_inversion', params)]);
   const k = d.kpis;
 

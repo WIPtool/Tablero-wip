@@ -4,7 +4,7 @@ import { GraficaPaneles } from '@/componentes/GraficaPaneles';
 import { Tabla } from '@/componentes/Tabla';
 import { pedir, type Embudo } from '@/lib/datos';
 import { pesos } from '@/lib/formato';
-import { leerRango, type ParametrosBusqueda } from '@/lib/rango';
+import { leerRango, paramsPeriodo, type ParametrosBusqueda } from '@/lib/rango';
 import { buscarPagina } from '@/lib/paginas';
 
 export const metadata: Metadata = { title: 'Embudo' };
@@ -14,7 +14,7 @@ const dias = (v: number | null) => (v == null ? '—' : `${v.toLocaleString('es-
 
 export default async function PaginaEmbudo({ searchParams }: { searchParams: Promise<ParametrosBusqueda> }) {
   const rango = leerRango(await searchParams);
-  const d = await pedir<Embudo>('tablero_embudo', { p_desde: rango.desde, p_hasta: rango.hasta });
+  const d = await pedir<Embudo>('tablero_embudo', paramsPeriodo(rango));
   const k = d.kpis;
   const sinOportunidades = !d.etapas.some((e) => e.oportunidades > 0);
   const sinOrigen = d.por_origen.find((o) => o.origen === 'Sin origen');

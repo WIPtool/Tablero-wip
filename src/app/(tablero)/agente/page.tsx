@@ -4,7 +4,7 @@ import { GraficaPaneles } from '@/componentes/GraficaPaneles';
 import { Tabla } from '@/componentes/Tabla';
 import { pedir, type Agente } from '@/lib/datos';
 import { pct } from '@/lib/formato';
-import { leerRango, type ParametrosBusqueda } from '@/lib/rango';
+import { leerRango, paramsPeriodo, type ParametrosBusqueda } from '@/lib/rango';
 import { buscarPagina } from '@/lib/paginas';
 
 export const metadata: Metadata = { title: 'Agente de WhatsApp' };
@@ -13,7 +13,7 @@ const tasa = (a?: number | null, b?: number | null) => (b ? (a ?? 0) / b : null)
 
 export default async function PaginaAgente({ searchParams }: { searchParams: Promise<ParametrosBusqueda> }) {
   const rango = leerRango(await searchParams);
-  const d = await pedir<Agente>('tablero_agente', { p_desde: rango.desde, p_hasta: rango.hasta });
+  const d = await pedir<Agente>('tablero_agente', paramsPeriodo(rango));
   const k = d.kpis;
 
   return (
