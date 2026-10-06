@@ -242,9 +242,9 @@ ${ctx.texto}
 
 # Tarea: mensaje de seguimiento
 La persona dejó de responder. Escribe UN mensaje corto de seguimiento (máximo 20 palabras) que retome la conversación con naturalidad:
-- No repitas lo que ya dijiste ni vuelvas a saludar como si fuera la primera vez; no reclames que no ha respondido ni presiones.
-- Retoma lo último de lo que hablaban y termina con una pregunta fácil de responder.
-- Si ya mostró interés o preguntó por precios o el demo, ofrécele el enlace de agenda.
+- NO repitas la pregunta de tu último mensaje: si no la respondió, cambia de ángulo. No vuelvas a saludar como si fuera la primera vez, no reclames que no ha respondido ni presiones.
+- Aporta algo nuevo y útil según lo que preguntó: si preguntó por precios o el demo, ofrécele ver WIP en una reunión corta con el enlace de agenda (ahí se cotiza su caso); si preguntó qué hace WIP o si se puede personalizar, un enlace al sitio que le sirva o la reunión.
+- Termina con una pregunta de sí o no, fácil de responder.
 - 1 emoji de la lista permitida.
 No escribas (enviar = false) si la persona cerró la conversación: dijo que no le interesa, que no la contacten, que ya agendó, que lo revisará y avisará, o se despidió.
 
@@ -263,7 +263,7 @@ Responde SIEMPRE llamando la herramienta seguimiento, una sola vez. No escribas 
       required: ['enviar'],
     },
   };
-  salida.push({ json: { lead_id: lead.id, pedido: { model: MODELO, max_tokens: 512, system: sistema, messages: mensajes, tools: [herramienta], tool_choice: { type: 'auto' } } } });
+  salida.push({ json: { lead_id: lead.id, pedido: { model: MODELO, max_tokens: 1500, system: sistema, messages: mensajes, tools: [herramienta], tool_choice: { type: 'auto' } } } });
 }
 return salida;
 
@@ -283,8 +283,10 @@ const x = uso && uso.input ? uso.input : { enviar: !!textoLibre, mensaje: textoL
 const texto = limpiarTexto(x.mensaje);
 const propuesto = x.enviar === true && !!texto;
 const enviar = EN_VIVO && propuesto;
+// Si Claude falló (error, se le acabaron los tokens o dijo enviar sin mensaje), no se guarda nada: se reintenta en la próxima hora.
+const fallo = (!uso && !textoLibre) || (x.enviar === true && !texto);
 return { json: {
-  lead_id, enviar,
+  lead_id, enviar, fallo, stop: r.stop_reason || (r.error && r.error.type) || '',
   kommo: [{ id: lead_id, custom_fields_values: [{ field_id: CAMPO_RESPUESTA, values: [{ value: texto }] }] }],
   bot: [{ bot_id: BOT_RESPUESTA, entity_id: lead_id, entity_type: 2 }],
   guardar: enviar
