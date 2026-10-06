@@ -15,6 +15,9 @@ export function Encabezado({ pagina, rango }: { pagina: Pagina; rango?: Rango })
         <div className="flex min-w-0 flex-col gap-1.5 md:items-end">
           <SelectorPeriodo rango={rango} />
           <span className="text-xs text-suave">{describir(rango)} · comparado con {describir(anterior(rango))}</span>
+          {rango.preset === 'hoy' && (
+            <span className="text-xs text-suave">Hoy va hasta la última carga: Kommo, el agente y Meta se cargan cada hora; Google Analytics, Search Console y Google Ads llegan con retraso.</span>
+          )}
         </div>
       )}
     </div>

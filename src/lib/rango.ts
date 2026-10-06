@@ -1,15 +1,19 @@
 // Periodo del tablero. Vive en la dirección (?p=28, ?p=otro&desde=…&hasta=…) para poder compartir enlaces.
 // Como Data Studio: por defecto los últimos 28 días sin contar hoy (hoy está incompleto). Fechas de Bogotá.
+// "Hoy" muestra el día en curso hasta la última carga (Kommo, el agente y Meta se cargan cada hora; Google llega con retraso).
 import { fechaLarga } from './formato';
 
-export type Preset = '7' | '28' | '90' | 'mes' | 'mes_ant' | 'otro';
+export type Preset = 'hoy' | '7' | '28' | '90' | 'semana' | 'semana_ant' | 'mes' | 'mes_ant' | 'otro';
 export interface Rango { preset: Preset; desde: string; hasta: string }
 export type ParametrosBusqueda = Record<string, string | string[] | undefined>;
 
 export const PRESETS: { id: Preset; etiqueta: string }[] = [
+  { id: 'hoy', etiqueta: 'Hoy' },
   { id: '7', etiqueta: '7 días' },
   { id: '28', etiqueta: '28 días' },
   { id: '90', etiqueta: '90 días' },
+  { id: 'semana', etiqueta: 'Esta semana' },
+  { id: 'semana_ant', etiqueta: 'Semana anterior' },
   { id: 'mes', etiqueta: 'Este mes' },
   { id: 'mes_ant', etiqueta: 'Mes anterior' },
   { id: 'otro', etiqueta: 'Otro' },
@@ -32,9 +36,14 @@ export function calcular(preset: Preset, desde?: string, hasta?: string): { desd
   const hoy = hoyBogota();
   const ayer = sumarDias(hoy, -1);
   const primeroDelMes = hoy.slice(0, 8) + '01';
+  // Las semanas van de lunes a domingo.
+  const lunes = sumarDias(hoy, -((new Date(hoy + 'T00:00:00Z').getUTCDay() + 6) % 7));
   switch (preset) {
+    case 'hoy': return { desde: hoy, hasta: hoy };
     case '7': return { desde: sumarDias(hoy, -7), hasta: ayer };
     case '90': return { desde: sumarDias(hoy, -90), hasta: ayer };
+    case 'semana': return { desde: lunes, hasta: hoy === lunes ? hoy : ayer };
+    case 'semana_ant': return { desde: sumarDias(lunes, -7), hasta: sumarDias(lunes, -1) };
     case 'mes': return { desde: primeroDelMes, hasta: hoy === primeroDelMes ? hoy : ayer };
     case 'mes_ant': {
       const fin = sumarDias(primeroDelMes, -1);
@@ -60,7 +69,8 @@ export function anterior({ desde, hasta }: { desde: string; hasta: string }) {
   return { desde: sumarDias(desde, -n), hasta: sumarDias(desde, -1) };
 }
 
-export const describir = (r: { desde: string; hasta: string }) => `${fechaLarga(r.desde)} – ${fechaLarga(r.hasta)}`;
+export const describir = (r: { desde: string; hasta: string }) =>
+  r.desde === r.hasta ? fechaLarga(r.desde) : `${fechaLarga(r.desde)} – ${fechaLarga(r.hasta)}`;
 
 // Parámetros de la dirección que conservan el periodo al cambiar de página.
 export function consultaPeriodo(r: Rango) {
