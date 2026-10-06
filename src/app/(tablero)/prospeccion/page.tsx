@@ -28,7 +28,8 @@ export default async function PaginaProspeccion({ searchParams }: { searchParams
         { etiqueta: 'Costo por lead caliente', valor: tasa(k.gasto, k.leads), anterior: tasa(k.gasto_ant, k.leads_ant), formato: pesos, menorEsMejor: true },
       ]} />
       <Aviso>
-        Explee no entrega cifras por día: se guardan desde el 28 de septiembre de 2026, y todo lo anterior aparece sumado el 1 de septiembre.
+        Explee no entrega cifras por día: desde el 6 de octubre de 2026 cada día se calcula en hora de Colombia restando los totales acumulados
+        que se guardan cada hora. Lo anterior al 28 de septiembre aparece sumado el 1 de septiembre, y el 29 de septiembre tiene un ajuste para cuadrar con Explee.
         El gasto está en dólares y se pasa a pesos con la TRM del día.
       </Aviso>
       <Rejilla>

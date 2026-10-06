@@ -10,6 +10,7 @@ export const PAGINAS: Pagina[] = [
   { id: 'email', titulo: 'Email marketing', sub: 'Correos de Brevo: automatizaciones, campañas y clics' },
   { id: 'prospeccion', titulo: 'Prospección', sub: 'Correos en frío de Explee: respuestas, leads calientes y costo' },
   { id: 'embudo', titulo: 'Embudo', sub: 'Oportunidades de Kommo por etapa y origen, y lo que cuesta cada reunión y cada cliente' },
+  { id: 'agente', titulo: 'Agente de WhatsApp', sub: 'Conversaciones que atiende el agente con Claude: respuestas, traspasos a una persona y reuniones' },
   { id: 'costos', titulo: 'Costos fijos', sub: 'Suscripciones que suman a la inversión (Brevo y demás)' },
   { id: 'accionadores', titulo: 'Accionadores', sub: 'Enlaces medidos, eventos y datos que suman información en Analytics' },
 ];

@@ -108,7 +108,7 @@ return [{ json: {
   kommo: [{ id: ctx.lead_id, custom_fields_values: [{ field_id: CAMPO_RESPUESTA, values: [{ value: texto }] }],
     ...(traspaso ? { tags_to_add: [{ name: 'Atender persona' }] } : {}) }],
   bot: [{ bot_id: BOT_RESPUESTA, entity_id: ctx.lead_id, entity_type: 2 }],
-  guardar: { lead_id: ctx.lead_id, rol: 'agente', texto, momento: new Date().toISOString() },
+  guardar: { lead_id: ctx.lead_id, rol: 'agente', texto, traspaso, momento: new Date().toISOString() },
   tarea: [{ entity_id: ctx.lead_id, entity_type: 'leads', responsible_user_id: ctx.responsable, task_type_id: 1,
     text: `Atender por WhatsApp: ${x.motivo_traspaso || 'el agente pasó la conversación'}`.slice(0, 500),
     complete_till: Math.floor(Date.now() / 1000) + 3600 }],
