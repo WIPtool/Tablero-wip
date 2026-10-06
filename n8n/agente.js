@@ -270,7 +270,9 @@ return salida;
 // == Seguimiento de Claude (Code, una vez por cada elemento)
 // Saca el mensaje y arma lo que se escribe en Kommo y en Supabase. Si Claude decide no escribir, solo se guarda esa
 // decisión (tipo sin_seguimiento) para no volver a preguntar en la próxima hora.
+// Modo borrador (__SEGUIMIENTO_EN_VIVO__ = false): no envía nada; guarda el mensaje propuesto como sin_seguimiento "(borrador)" para revisarlo.
 __COMUN__
+const EN_VIVO = __SEGUIMIENTO_EN_VIVO__;
 const CAMPO_RESPUESTA = __CAMPO_RESPUESTA__;
 const BOT_RESPUESTA = __BOT_RESPUESTA__;
 const lead_id = $('Armar seguimientos').item.json.lead_id;
@@ -279,12 +281,14 @@ const uso = (r.content || []).find((c) => c.type === 'tool_use' && c.name === 's
 const textoLibre = (r.content || []).filter((c) => c.type === 'text').map((c) => c.text).join('\n').trim();
 const x = uso && uso.input ? uso.input : { enviar: !!textoLibre, mensaje: textoLibre };
 const texto = limpiarTexto(x.mensaje);
-const enviar = x.enviar === true && !!texto;
+const propuesto = x.enviar === true && !!texto;
+const enviar = EN_VIVO && propuesto;
 return { json: {
   lead_id, enviar,
   kommo: [{ id: lead_id, custom_fields_values: [{ field_id: CAMPO_RESPUESTA, values: [{ value: texto }] }] }],
   bot: [{ bot_id: BOT_RESPUESTA, entity_id: lead_id, entity_type: 2 }],
   guardar: enviar
     ? { lead_id, rol: 'agente', tipo: 'seguimiento', texto, momento: new Date().toISOString() }
-    : { lead_id, rol: 'agente', tipo: 'sin_seguimiento', texto: `(sin seguimiento: ${x.motivo || 'Claude no devolvió mensaje'})`.slice(0, 500), momento: new Date().toISOString() },
+    : { lead_id, rol: 'agente', tipo: 'sin_seguimiento', momento: new Date().toISOString(),
+        texto: (propuesto ? `(borrador, no enviado) ${texto}` : `(sin seguimiento: ${x.motivo || 'Claude no devolvió mensaje'})`).slice(0, 1500) },
 } };

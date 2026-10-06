@@ -6,7 +6,7 @@
 //  - f15-formularios-kommo.json: recibe los formularios del sitio (/api/contact) y los crea en Kommo con su Origen (F1).
 //  - f16-agente-whatsapp.json: agente de WhatsApp con Claude (F7); lo llama el webhook de Kommo "mensaje entrante".
 //    Necesita CRED_CLAUDE=<id de la credencial Anthropic "Claude (agente WhatsApp)">; con ella F12 también lleva el agente de seguimiento.
-// Uso: AGENTE_EN_VIVO=1 CRED_CALENDLY=0U9bkwTaH0qwcc9h CRED_CLAUDE=lI6pyiToLgn65AwG node n8n/armar-flujo.cjs  (ids de las credenciales "Calendly (lectura)" y "Claude (agente WhatsApp)" en n8n)
+// Uso: AGENTE_EN_VIVO=1 SEGUIMIENTO_EN_VIVO=1 CRED_CALENDLY=0U9bkwTaH0qwcc9h CRED_CLAUDE=lI6pyiToLgn65AwG node n8n/armar-flujo.cjs  (ids de las credenciales "Calendly (lectura)" y "Claude (agente WhatsApp)" en n8n)
 // Las credenciales se referencian por id (se crean a mano en n8n; las claves nunca van en este repositorio).
 const fs = require('fs');
 const path = require('path');
@@ -32,6 +32,8 @@ const CAMPO_RESPUESTA = 493668; // oportunidad: "Respuesta del agente"
 const BOT_RESPUESTA = 16206;    // Salesbot "Agente WhatsApp: enviar respuesta" (envía ese campo por WhatsApp)
 // Modo prueba del agente: responde solo a oportunidades con la etiqueta "Prueba agente". AGENTE_EN_VIVO=1 lo quita.
 const MODO_PRUEBA = process.env.AGENTE_EN_VIVO !== '1';
+// Seguimiento: sin SEGUIMIENTO_EN_VIVO=1 solo guarda en Supabase los mensajes que propone (borrador), sin enviarlos.
+const SEGUIMIENTO_EN_VIVO = process.env.SEGUIMIENTO_EN_VIVO === '1';
 // Ruta del webhook que llama el script de Google Ads (difícil de adivinar; no da acceso a nada, solo recibe cifras).
 const RUTA_GADS = 'gads-7c1e4b9a2f6d48e3a51c';
 
@@ -154,7 +156,8 @@ const SEGUIMIENTO = (() => {
   const auth = { authentication: 'genericCredentialType', genericAuthType: 'httpHeaderAuth' };
   const cuerpo = (expr) => ({ sendBody: true, specifyBody: 'json', jsonBody: `={{ JSON.stringify(${expr}) }}` });
   const preparar = (js) => conComun(js).split('__SUPABASE__').join(SUPABASE).split('__INSTRUCCIONES__').join(INSTRUCCIONES)
-    .split('__CAMPO_RESPUESTA__').join(String(CAMPO_RESPUESTA)).split('__BOT_RESPUESTA__').join(String(BOT_RESPUESTA));
+    .split('__CAMPO_RESPUESTA__').join(String(CAMPO_RESPUESTA)).split('__BOT_RESPUESTA__').join(String(BOT_RESPUESTA))
+    .split('__SEGUIMIENTO_EN_VIVO__').join(String(SEGUIMIENTO_EN_VIVO));
   const y = 1700;
   const nodos = [
     codigoTexto(id(1), 'Trabajos seguimiento', [260, y], preparar(AGENTE['Trabajos seguimiento'])),
