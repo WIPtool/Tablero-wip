@@ -67,6 +67,16 @@ const lineaAnuncio = utm('UTM_CONTENT')
   ? `- Llegó por un anuncio de Meta${plataforma ? ' en ' + plataforma : ''}${anuncio ? '. Texto del anuncio: «' + anuncio.texto + '»' : ' (no tengo el texto del anuncio)'}. Úsalo para entender qué le interesó; no menciones nombres internos de campañas ni de anuncios.`
   : '';
 const campanaKommo = campo('Campaña');
+// Enlaces al sitio medidos con la plataforma de donde viene la persona (accionadores; redirects en vercel.json de landing-wip).
+const W = 'https://www.wiptool.com';
+const ENLACES = {
+  Instagram: { portada: W + '/ig', equipos: W + '/equipos/ig', planes: W + '/planes/ig' },
+  Facebook: { portada: W + '/fb', equipos: W + '/equipos/fb', planes: W + '/planes/fb' },
+  'Meta Ads': { portada: W + '/meta', equipos: W + '/equipos/meta', planes: W + '/planes/meta' },
+  Explee: { portada: W + '/explee', equipos: W + '/equipos/explee', planes: W + '/planes/explee' },
+  'Correo (Brevo)': { portada: W + '/email', equipos: W + '/equipos/email', planes: W + '/planes/email' },
+};
+const enlaces = ENLACES[origen] || { portada: W, equipos: W + '/equipos', planes: W + '/equipos#planes' };
 const agenda = `https://calendly.com/comercial-wiptool/acercamiento-wip?utm_source=${ORIGEN_UTM[origen] || 'whatsapp'}&utm_medium=agente_whatsapp&utm_content=kommo-${lead.id}`;
 // Historial en formato de Claude: cliente → user, agente → assistant; mensajes seguidos del mismo rol se juntan.
 const mensajes = [];
@@ -84,6 +94,7 @@ const sistema = `__INSTRUCCIONES__
 - Fecha y hora en Colombia: ${hoy}
 - La persona llegó por: ${origen || 'origen desconocido'}${campanaKommo && !utm('UTM_CONTENT') ? ' (campaña: ' + campanaKommo + ')' : ''}
 ${lineaAnuncio ? lineaAnuncio + '\n' : ''}- Enlace para agendar la reunión (úsalo tal cual): ${agenda}
+- Enlaces al sitio para esta persona (úsalos tal cual): portada y WIP Redes ${enlaces.portada} · WIP Equipos ${enlaces.equipos} · planes de WIP Equipos ${enlaces.planes}
 
 # Formato de salida
 Responde SIEMPRE llamando la herramienta responder, una sola vez, con el mensaje de WhatsApp en respuesta. No escribas texto fuera de la herramienta.`;
