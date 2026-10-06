@@ -104,7 +104,7 @@ const herramienta = {
   input_schema: {
     type: 'object',
     properties: {
-      respuesta: { type: 'string', description: 'El mensaje de WhatsApp: máximo 2 frases cortas, con 1 o 2 emojis, sin markdown.' },
+      respuesta: { type: 'string', description: 'El mensaje de WhatsApp: máximo 25 palabras y 2 frases, un solo dato, con 1 emoji de la lista permitida, sin markdown.' },
       pasar_a_persona: { type: 'boolean', description: 'true si un asesor debe continuar la conversación.' },
       motivo_traspaso: { type: 'string', description: 'Si pasar_a_persona es true: resumen breve de la conversación y por qué.' },
       datos: {
@@ -130,7 +130,13 @@ const uso = (r.content || []).find((c) => c.type === 'tool_use' && c.name === 'r
 const textoLibre = (r.content || []).filter((c) => c.type === 'text').map((c) => c.text).join('\n').trim();
 const x = uso && uso.input && uso.input.respuesta ? uso.input : { respuesta: textoLibre, pasar_a_persona: false };
 if (!x.respuesta) throw new Error('Claude no devolvió una respuesta: ' + JSON.stringify(r).slice(0, 300));
-const texto = String(x.respuesta).replace(/\*\*?|__|^#+\s*/gm, '').trim().slice(0, 1500);
+// Kommo borra los emojis de 4 bytes (👋 📅 🙌…) al guardar el campo que envía el Salesbot: se cambian por equivalentes que sí
+// pasan (✋ ⏰ ✨ ✅ ➡️ ⚡ ☎️) y los demás se quitan, para que no queden espacios dobles.
+const EMOJIS = { '👋': '✋', '🙋': '✋', '📅': '⏰', '🗓️': '⏰', '🗓': '⏰', '📆': '⏰', '🙌': '✨', '😊': '✨', '🙂': '✨', '😃': '✨', '💪': '✨',
+  '👍': '✅', '👌': '✅', '👉': '➡️', '📍': '➡️', '🚀': '⚡', '🔥': '⚡', '📞': '☎️', '💬': '✨', '📊': '✅', '🚚': '⚡' };
+const texto = Object.entries(EMOJIS).reduce((t, [a, b]) => t.split(a).join(b), String(x.respuesta))
+  .replace(/\*\*?|__|^#+\s*/gm, '').replace(/[\u{10000}-\u{10FFFF}]️?/gu, '').replace(/[ \t]{2,}/g, ' ').replace(/ ([.,!?])/g, '$1')
+  .trim().slice(0, 1500);
 const traspaso = x.pasar_a_persona === true;
 const d = x.datos || {};
 const datos = [d.empresa && `Empresa: ${d.empresa}`, d.pais && `País: ${d.pais}`, d.tipo_operacion && `Operación: ${d.tipo_operacion}`,
