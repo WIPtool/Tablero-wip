@@ -1,0 +1,48 @@
+{
+  "name": "F17 · Avisos de error por correo (Brevo)",
+  "nodes": [
+    {
+      "id": "d4f0c0de-0017-4000-8000-000000000001",
+      "name": "Error en un flujo",
+      "type": "n8n-nodes-base.errorTrigger",
+      "typeVersion": 1,
+      "position": [0, 0],
+      "parameters": {}
+    },
+    {
+      "id": "d4f0c0de-0017-4000-8000-000000000002",
+      "name": "Armar correo",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [240, 0],
+      "parameters": {
+        "jsCode": "// Arma el aviso a partir de lo que entrega el Error Trigger (flujo, ejecución, nodo y mensaje del error).\nconst x = $input.first().json;\nconst flujo = x.workflow?.name || 'Flujo sin nombre';\nconst ej = x.execution || {};\nconst err = ej.error || x.trigger?.error || {};\nconst nodo = ej.lastNodeExecuted || err.node?.name || 'desconocido';\nconst mensaje = err.message || 'Sin mensaje de error';\nconst cuando = new Intl.DateTimeFormat('es-CO', { timeZone: 'America/Bogota', dateStyle: 'medium', timeStyle: 'short' }).format(new Date());\nconst esc = (s) => String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');\nconst enlace = ej.url ? `<p><a href=\"${esc(ej.url)}\">Ver la ejecución en n8n</a></p>` : '<p>El error ocurrió en el disparador, antes de crear una ejecución.</p>';\nconst pila = err.stack ? `<pre style=\"white-space:pre-wrap;font-size:12px;color:#555\">${esc(String(err.stack).slice(0, 2000))}</pre>` : '';\nreturn [{ json: { correo: {\n  sender: { name: 'n8n WIP', email: 'comercial@wiptool.com' },\n  to: [{ email: 'jessica@wiptool.com' }],\n  subject: `Falló ${flujo} (nodo: ${nodo})`,\n  htmlContent: `<p><b>Flujo:</b> ${esc(flujo)}<br><b>Nodo:</b> ${esc(nodo)}<br><b>Cuándo:</b> ${cuando} (hora Colombia)<br><b>Modo:</b> ${esc(ej.mode || 'n/d')}</p><p><b>Error:</b> ${esc(mensaje)}</p>${enlace}${pila}`,\n} } }];\n"
+      }
+    },
+    {
+      "id": "d4f0c0de-0017-4000-8000-000000000003",
+      "name": "Enviar con Brevo",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [480, 0],
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.brevo.com/v3/smtp/email",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify($json.correo) }}",
+        "options": {}
+      },
+      "credentials": {
+        "httpHeaderAuth": { "id": "eOtWousRPiKJpfVf", "name": "Brevo (lectura)" }
+      }
+    }
+  ],
+  "connections": {
+    "Error en un flujo": { "main": [[{ "node": "Armar correo", "type": "main", "index": 0 }]] },
+    "Armar correo": { "main": [[{ "node": "Enviar con Brevo", "type": "main", "index": 0 }]] }
+  },
+  "settings": { "executionOrder": "v1", "timezone": "America/Bogota" }
+}
