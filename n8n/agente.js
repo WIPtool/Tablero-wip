@@ -64,7 +64,9 @@ const mensajesClaude = (historial) => {
   for (const h of historial.slice(-30)) {
     const role = h.rol === 'agente' ? 'assistant' : 'user';
     const ult = mensajes[mensajes.length - 1];
-    if (ult && ult.role === role) ult.content += '\n' + h.texto; else mensajes.push({ role, content: h.texto });
+    // Los avisos del error 131060 guardados antes de reconocerlos se muestran igual que los nuevos.
+    const texto = /No se puede mostrar este mensaje en el CRM/i.test(h.texto) ? '[Mensaje ilegible: WhatsApp no deja ver en el CRM lo que escribió la persona]' : h.texto;
+    if (ult && ult.role === role) ult.content += '\n' + texto; else mensajes.push({ role, content: texto });
   }
   if (!mensajes.length || mensajes[0].role !== 'user') mensajes.unshift({ role: 'user', content: '(inicio de la conversación)' });
   return mensajes;
@@ -92,7 +94,11 @@ if (m.type && m.type !== 'incoming') return [];
 const lead = Number(String(m.element_type) === '2' ? m.element_id : (String(m.entity_type) === 'lead' ? m.entity_id : m.element_id));
 if (!lead) return [];
 const adjunto = m.attachment && m.attachment.type ? `[La persona envió un ${m.attachment.type === 'voice' ? 'audio' : 'archivo (' + m.attachment.type + ')'}]` : '';
-const texto = String(m.text || '').trim() || adjunto;
+// Con WhatsApp en coexistencia, algunos mensajes (sobre todo el primero que llega desde un anuncio) solo se ven en la app del
+// celular y Kommo manda un aviso del error 131060 en vez del texto: se reemplaza por una marca para que el agente salude.
+const ILEGIBLE = /No se puede mostrar este mensaje en el CRM|error-131060|131060/i;
+const crudo = String(m.text || '').trim();
+const texto = ILEGIBLE.test(crudo) ? '[Mensaje ilegible: WhatsApp no deja ver en el CRM lo que escribió la persona]' : (crudo || adjunto);
 if (!texto) return [];
 return [{ json: { lead_id: lead, mensaje_id: String(m.id || `${lead}-${m.created_at || Date.now()}`), talk_id: String(m.talk_id || ''), texto,
   momento: m.created_at ? new Date(Number(m.created_at) * 1000).toISOString() : new Date().toISOString() } }];
