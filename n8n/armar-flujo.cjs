@@ -449,6 +449,10 @@ if (CRED_CLAUDE) {
         ...cuerpoJson(`${respuesta}.nota`) }, credentials: CRED.kommo }),
       { ...http(id(16), 'Correo de traspaso', [3000, 0], { parameters: { method: 'POST', url: 'https://api.brevo.com/v3/smtp/email', ...auth,
         ...cuerpoJson(`${respuesta}.correo`) }, credentials: CRED.brevo }), onError: 'continueRegularOutput' },
+      // Saca la oportunidad de Leads entrantes (o de Sin respuesta) a En conversación cuando la persona escribe.
+      codigoTexto(id(29), 'Mover a En conversación', [1100, -400], AGENTE['Mover a En conversación']),
+      http(id(30), 'Etapa En conversación', [1300, -400], { parameters: { method: 'PATCH', url: 'https://wiptool.kommo.com/api/v4/leads', ...auth,
+        ...cuerpoJson("$('Mover a En conversación').first().json.cambio") }, credentials: CRED.kommo }),
       // Botón "Necesito reprogramar" del recordatorio de la demo (F19): tarea, nota y correo, en cualquier etapa.
       codigoTexto(id(25), 'Pide reprogramar', [1100, -200], AGENTE['Pide reprogramar'].split('const lead = leerKommo').join(
         AGENTE['Común del agente'].split('\n').find((l) => l.startsWith('const leerKommo')) + '\nconst lead = leerKommo')),
@@ -472,7 +476,8 @@ if (CRED_CLAUDE) {
     ],
     connections: {
       'Mensaje de Kommo': a('Mensaje entrante'), 'Mensaje entrante': a('Guardar mensaje'), 'Guardar mensaje': a('Esperar'), Esperar: a('Historial'),
-      Historial: a('Lead en Kommo'), 'Lead en Kommo': varios('Anuncio a buscar', 'Pide reprogramar'),
+      Historial: a('Lead en Kommo'), 'Lead en Kommo': varios('Anuncio a buscar', 'Pide reprogramar', 'Mover a En conversación'),
+      'Mover a En conversación': a('Etapa En conversación'),
       'Pide reprogramar': a('Tarea reprogramar'), 'Tarea reprogramar': a('Nota reprogramar'), 'Nota reprogramar': a('Correo reprogramar'), 'Anuncio a buscar': a('Anuncio de Meta'), 'Anuncio de Meta': a('Mensajes enviados'), 'Mensajes enviados': a('Decidir y preguntar a Claude'), 'Decidir y preguntar a Claude': a('Claude'),
       Claude: a('Respuesta de Claude'), 'Respuesta de Claude': a('Escribir respuesta en Kommo'), 'Escribir respuesta en Kommo': a('Enviar por WhatsApp'),
       'Enviar por WhatsApp': a('Guardar respuesta'),

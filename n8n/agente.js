@@ -120,6 +120,16 @@ return [{ json: {
     htmlContent: `<p>${String(nombre).replace(/</g, '&lt;')} tocó <b>Necesito reprogramar</b> en el recordatorio de la demo por WhatsApp.</p><p>Escríbele para acordar un nuevo horario.</p><p><a href="https://wiptool.kommo.com/leads/detail/${msg.lead_id}">Abrir en Kommo</a></p>` },
 } }];
 
+// == Mover a En conversación (Code, una vez para todos los elementos)
+// Kommo solo saca un chat de "Leads entrantes" cuando alguien lo acepta o edita la oportunidad en Kommo: si se le contesta desde
+// la app de WhatsApp del celular, se queda ahí. Cada mensaje que entra pasa la oportunidad a "En conversación"; lo mismo si
+// estaba en "Sin respuesta (retomar)" y volvió a escribir (y entonces Meli le responde).
+const EMBUDO = 14551307, ENTRANTES = 112413247, EN_CONVERSACION = 112413251, SIN_RESPUESTA = 112730823;
+const j = $input.first().json;
+const lead = typeof j.data === 'string' ? JSON.parse(j.data) : j;
+if (Number(lead.pipeline_id) !== EMBUDO || ![ENTRANTES, SIN_RESPUESTA].includes(Number(lead.status_id))) return [];
+return [{ json: { cambio: [{ id: lead.id, pipeline_id: EMBUDO, status_id: EN_CONVERSACION }] } }];
+
 // == Anuncio a buscar (Code, una vez para todos los elementos)
 // Si la oportunidad llegó por un anuncio de Meta (utm_campaign y utm_content), pide su texto a Supabase (tabla meta_anuncio).
 // También arma la consulta de los mensajes que salieron por WhatsApp a ese contacto en las últimas 24 h (para saber si escribió alguien del equipo).
@@ -146,7 +156,8 @@ const historial = $('Historial').all().map((i) => i.json).filter((h) => h.rol).r
 const lead = leerKommo($('Lead en Kommo').first().json);
 const ultimoCliente = historial.filter((h) => h.rol === 'cliente').pop();
 if (ultimoCliente && ultimoCliente.mensaje_id !== yo.mensaje_id) return []; // llegó otro mensaje después: responde esa ejecución
-if (!ETAPAS_AGENTE.has(Number(lead.status_id))) return [];
+// Si estaba en "Sin respuesta (retomar)" y volvió a escribir, "Mover a En conversación" ya la está pasando a En conversación.
+if (!ETAPAS_AGENTE.has(Number(lead.status_id)) && Number(lead.status_id) !== 112730823) return [];
 const etiquetas = etiquetasDe(lead);
 if (etiquetas.includes('Atender persona') || etiquetas.includes('Agente pausado')) return [];
 // Modo prueba: mientras esté activo, solo responde a oportunidades con la etiqueta "Prueba agente".
