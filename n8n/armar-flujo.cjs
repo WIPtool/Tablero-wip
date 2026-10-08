@@ -7,6 +7,8 @@
 //  - f15-formularios-kommo.json: recibe los formularios del sitio (/api/contact) y los crea en Kommo con su Origen (F1).
 //  - f16-agente-whatsapp.json: agente de WhatsApp con Claude (F7); lo llama el webhook de Kommo "mensaje entrante".
 //    Necesita CRED_CLAUDE=<id de la credencial Anthropic "Claude (agente WhatsApp)">; con ella F12 también lleva el agente de seguimiento.
+//  - f19-recordatorio-demo.json: recordatorio de la demo virtual 20 min antes (recordatorio-demo.js); necesita BOT_DEMO_20 y, para
+//    Google Calendar, CRED_GCAL=<id de la credencial "Google Calendar (lectura)">.
 // Uso: AGENTE_EN_VIVO=1 SEGUIMIENTO_EN_VIVO=1 CRED_CALENDLY=0U9bkwTaH0qwcc9h CRED_CLAUDE=lI6pyiToLgn65AwG node n8n/armar-flujo.cjs  (ids de las credenciales "Calendly (lectura)" y "Claude (agente WhatsApp)" en n8n)
 // Las credenciales se referencian por id (se crean a mano en n8n; las claves nunca van en este repositorio).
 const fs = require('fs');
@@ -33,6 +35,12 @@ const CAMPO_RESPUESTA = 493668; // oportunidad: "Respuesta del agente"
 const BOT_RESPUESTA = 16206;    // Salesbot "Agente WhatsApp: enviar respuesta" (envía ese campo por WhatsApp)
 const BOT_PLANTILLA = 16850;    // Salesbot "Agente WhatsApp: plantilla retomar contacto" (plantilla de WhatsApp 8720, aprobada por Meta)
 const BOT_RECORDATORIO = 16852; // Salesbot "Agente WhatsApp: plantilla recordatorio" (plantilla de WhatsApp 8722, aprobada por Meta)
+// Recordatorio 20 min antes de la demo (F19): Salesbot con la plantilla 9568 "Recordatorio demo 20 min WIP" (botones Sí, asistiré /
+// Necesito reprogramar) y el campo de la oportunidad que llena su variable. Sin Salesbot (0) no se arma F19.
+const BOT_DEMO_20 = Number(process.env.BOT_DEMO_20 || 0);
+const CAMPO_ENLACE = 546606;    // Kommo · oportunidad: "Enlace de reunión"
+// Google Calendar (lectura) para F19: credencial OAuth de n8n (calendar.readonly); sin ella F19 solo mira Calendly.
+const CRED_GCAL = process.env.CRED_GCAL ? { googleCalendarOAuth2Api: { id: process.env.CRED_GCAL, name: 'Google Calendar (lectura)' } } : null;
 // Modo prueba del agente: responde solo a oportunidades con la etiqueta "Prueba agente". AGENTE_EN_VIVO=1 lo quita.
 const MODO_PRUEBA = process.env.AGENTE_EN_VIVO !== '1';
 // Seguimiento: sin SEGUIMIENTO_EN_VIVO=1 solo guarda en Supabase los mensajes que propone (borrador), sin enviarlos.
@@ -500,6 +508,62 @@ if (CRED_CLAUDE) {
   };
   fs.writeFileSync(path.join(__dirname, 'f18-brevo-kommo.json'), JSON.stringify(f18, null, 2));
 }
+// F19 · Recordatorio de la demo virtual 20 minutos antes (Calendly y, con CRED_GCAL, Google Calendar), con confirmación de asistencia.
+if (CRED_CALENDLY && BOT_DEMO_20) {
+  const RD = partes('recordatorio-demo.js');
+  const id = (k) => `f6f0c0de-00${String(k).padStart(2, '0')}-4000-8000-0000000000${String(k).padStart(2, '0')}`;
+  const auth = { authentication: 'genericCredentialType', genericAuthType: 'httpHeaderAuth' };
+  const cuerpo = (expr) => ({ sendBody: true, specifyBody: 'json', jsonBody: `={{ JSON.stringify(${expr}) }}` });
+  const preparar = (js) => js.split('__SUPABASE__').join(SUPABASE).split('__BOT_DEMO_20__').join(String(BOT_DEMO_20))
+    .split('__CAMPO_ENLACE__').join(String(CAMPO_ENLACE));
+  const google = CRED_GCAL ? [
+    { ...http(id(6), 'Eventos Google Calendar', [1100, 0], { parameters: { authentication: 'predefinedCredentialType', nodeCredentialType: 'googleCalendarOAuth2Api',
+      url: "=https://www.googleapis.com/calendar/v3/calendars/primary/events?singleEvents=true&orderBy=startTime&maxResults=50&timeMin={{ encodeURIComponent($('Ventana de la demo').first().json.desde) }}&timeMax={{ encodeURIComponent($('Ventana de la demo').first().json.hasta) }}" },
+      credentials: CRED_GCAL }), executeOnce: true, alwaysOutputData: true, onError: 'continueRegularOutput' },
+    codigoTexto(id(7), 'Invitados a buscar', [1320, 0], RD['Invitados a buscar']),
+    { ...http(id(8), 'Contacto en Kommo (demo)', [1540, 0], { parameters: auth, credentials: CRED.kommo }), alwaysOutputData: true, onError: 'continueRegularOutput' },
+  ] : [];
+  const x = CRED_GCAL ? 1760 : 1100;
+  const f19 = {
+    name: 'F19 · Recordatorio de demo 20 min antes (Calendly y Google Calendar → WhatsApp)',
+    nodes: [
+      { id: id(1), name: 'Cada hora (6 a 18 h)', type: 'n8n-nodes-base.scheduleTrigger', typeVersion: 1.2, position: [0, 0],
+        parameters: { rule: { interval: [{ field: 'cronExpression', expression: '10 6-18 * * *' }] } } },
+      http(id(2), 'Usuario Calendly', [220, 0], { parameters: { url: 'https://api.calendly.com/users/me', ...auth }, credentials: CRED_CALENDLY }),
+      codigoTexto(id(3), 'Ventana de la demo', [440, 0], RD['Ventana de la demo']),
+      { ...http(id(4), 'Citas Calendly', [660, 0], { parameters: auth, credentials: CRED_CALENDLY }), alwaysOutputData: true },
+      codigoTexto(id(5), 'Pedido registro', [770, 160], preparar(RD['Pedido registro'])),
+      { ...http(id(9), 'Registro citas (demo)', [880, 0], { parameters: auth, credentials: CRED.supabase }), executeOnce: true, alwaysOutputData: true },
+      ...google,
+      codigoTexto(id(10), 'Armar recordatorios 20 min', [x, 0], preparar(RD['Armar recordatorios 20 min'])),
+      { id: id(11), name: 'Una por una', type: 'n8n-nodes-base.splitInBatches', typeVersion: 3, position: [x + 220, 0], parameters: { options: {} } },
+      { id: id(12), name: 'Esperar a 20 min antes', type: 'n8n-nodes-base.wait', typeVersion: 1.1, position: [x + 440, 120], webhookId: 'f6f0c0de-0012-4000-8000-0000000c0de9',
+        parameters: { resume: 'specificTime', dateTime: '={{ $json.envio }}' } },
+      http(id(13), 'Enlace en la oportunidad', [x + 660, 120], { parameters: { method: 'PATCH', url: 'https://wiptool.kommo.com/api/v4/leads', ...auth,
+        ...cuerpo("$('Una por una').item.json.lead") }, credentials: CRED.kommo }),
+      http(id(14), 'Guardar recordatorio', [x + 880, 120], { parameters: { method: 'POST', url: `${SUPABASE}/rest/v1/agente_mensajes`, ...auth,
+        sendHeaders: true, headerParameters: { parameters: [{ name: 'Prefer', value: 'return=minimal' }] }, ...cuerpo("$('Una por una').item.json.guardar") },
+        credentials: CRED.supabase }),
+      http(id(15), 'Enviar por WhatsApp', [x + 1100, 120], { parameters: { method: 'POST', url: 'https://wiptool.kommo.com/api/v2/salesbot/run', ...auth,
+        ...cuerpo("$('Una por una').item.json.bot") }, credentials: CRED.kommo }),
+    ],
+    connections: {
+      'Cada hora (6 a 18 h)': a('Usuario Calendly'), 'Usuario Calendly': a('Ventana de la demo'), 'Ventana de la demo': a('Citas Calendly'),
+      'Citas Calendly': a('Pedido registro'), 'Pedido registro': a('Registro citas (demo)'),
+      'Registro citas (demo)': a(CRED_GCAL ? 'Eventos Google Calendar' : 'Armar recordatorios 20 min'),
+      ...(CRED_GCAL ? { 'Eventos Google Calendar': a('Invitados a buscar'), 'Invitados a buscar': a('Contacto en Kommo (demo)'),
+        'Contacto en Kommo (demo)': a('Armar recordatorios 20 min') } : {}),
+      'Armar recordatorios 20 min': a('Una por una'),
+      'Una por una': { main: [[], [{ node: 'Esperar a 20 min antes', type: 'main', index: 0 }]] },
+      'Esperar a 20 min antes': a('Enlace en la oportunidad'), 'Enlace en la oportunidad': a('Guardar recordatorio'),
+      'Guardar recordatorio': a('Enviar por WhatsApp'), 'Enviar por WhatsApp': a('Una por una'),
+    },
+    settings: { executionOrder: 'v1', timezone: 'America/Bogota' },
+    pinData: {},
+  };
+  fs.writeFileSync(path.join(__dirname, 'f19-recordatorio-demo.json'), JSON.stringify(f19, null, 2));
+}
 fs.writeFileSync(path.join(__dirname, 'f14-google-ads.json'), JSON.stringify(f14, null, 2));
 console.log('ok · webhook de Google Ads: https://wiptool.app.n8n.cloud/webhook/' + RUTA_GADS);
+if (!BOT_DEMO_20) console.log('aviso · F19 no se armó: falta BOT_DEMO_20=<id del Salesbot>');
 console.log('ok · webhook de Brevo (F18): https://wiptool.app.n8n.cloud/webhook/' + RUTA_BREVO);
