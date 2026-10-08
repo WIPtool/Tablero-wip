@@ -2,7 +2,8 @@
 //  - f12-carga-tablero.json: cada hora carga Google (Analytics y Search Console), Meta Ads, la TRM, Brevo, Explee y Kommo a Supabase,
 //    y pasa a Kommo los leads calientes nuevos de Explee (F4, explee-kommo.js).
 //    Si se define CRED_CALENDLY=<id de la credencial>, también pasa a Kommo las citas nuevas de Calendly (F2, sitio-calendly.js).
-//    También pasa a "Sin respuesta (retomar)" a quien dejó de responder en "En conversación" (sin-respuesta.js).
+//    También califica las conversaciones con Claude (calificador.js), retoma y depura el ciclo de vida del lead (ciclo-vida.js) y
+//    pasa a "Sin respuesta (retomar)" a quien dejó de responder en "En conversación" (sin-respuesta.js).
 //  - f14-google-ads.json:    recibe lo que envía el script de Google Ads y lo guarda en Supabase.
 //  - f18-brevo-kommo.json:   recibe el webhook de Brevo (añadido a lista y baja) y marca la secuencia de correos en Kommo (brevo-kommo.js).
 //  - f15-formularios-kommo.json: recibe los formularios del sitio (/api/contact) y los crea en Kommo con su Origen (F1).
@@ -275,7 +276,78 @@ const SINRESP = (() => {
   const conexiones = Object.fromEntries(nombres.slice(0, -1).map((nm, i) => [nm, a(nombres[i + 1])]));
   return { nodos, conexiones, inicio: ['Trabajos sin respuesta'] };
 })();
-const ARRANQUE = [...INICIOS.slice(0, -1), 'Trabajos anuncios Meta', ...F2.inicio, INICIOS[INICIOS.length - 1], ...SEGUIMIENTO.inicio, ...SINRESP.inicio];
+// Ciclo de vida del lead (ciclo-vida.js): Retomador y Depurador, cada hora sobre Sin respuesta, Reunión agendada y Propuesta enviada.
+// Salesbots de las plantillas de retome (A propuesta 9748, B inicial 9750, C calificar 9754, D último con servicio 9762, E último general 9764).
+const BOTS_RETOME = { A: 18206, B: 18222, C: 18208, D: null, E: null };
+const CICLO = (() => {
+  const CV = partes('ciclo-vida.js');
+  const id = (k) => `a1f0c0de-07${String(k).padStart(2, '0')}-4000-8000-0000000007${String(k).padStart(2, '0')}`;
+  const auth = { authentication: 'genericCredentialType', genericAuthType: 'httpHeaderAuth' };
+  const cuerpo = (expr) => ({ sendBody: true, specifyBody: 'json', jsonBody: `={{ JSON.stringify(${expr}) }}` });
+  const preparar = (js) => js.split('__SUPABASE__').join(SUPABASE).split('__BOTS_RETOME__').join(JSON.stringify(BOTS_RETOME));
+  const ciclo = "$('Armar ciclo').first().json";
+  const sigue = { onError: 'continueRegularOutput', alwaysOutputData: true };
+  const y = 2500;
+  const nodos = [
+    codigoTexto(id(1), 'Trabajos ciclo', [260, y], CV['Trabajos ciclo']),
+    { ...http(id(2), 'Leads del ciclo', [420, y], { parameters: auth, credentials: CRED.kommo }), ...sigue },
+    codigoTexto(id(3), 'Pedidos Kommo ciclo', [580, y], CV['Pedidos Kommo ciclo']),
+    { ...http(id(4), 'Datos Kommo (ciclo)', [740, y], { parameters: auth, credentials: CRED.kommo }), ...sigue },
+    codigoTexto(id(5), 'Pedidos Supabase ciclo', [900, y], preparar(CV['Pedidos Supabase ciclo'])),
+    { ...http(id(6), 'Datos Supabase (ciclo)', [1060, y], { parameters: auth, credentials: CRED.supabase }), ...sigue },
+    codigoTexto(id(7), 'Armar ciclo', [1220, y], preparar(CV['Armar ciclo'])),
+    { ...http(id(8), 'Cambios en Kommo (ciclo)', [1380, y], { parameters: { method: 'PATCH', url: 'https://wiptool.kommo.com/api/v4/leads', ...auth,
+      ...cuerpo(`${ciclo}.leads`) }, credentials: CRED.kommo }), ...sigue },
+    { ...http(id(9), 'Notas (ciclo)', [1540, y], { parameters: { method: 'POST', url: 'https://wiptool.kommo.com/api/v4/leads/notes', ...auth,
+      ...cuerpo(`${ciclo}.notas`) }, credentials: CRED.kommo }), ...sigue },
+    { ...http(id(10), 'Tareas (ciclo)', [1700, y], { parameters: { method: 'POST', url: 'https://wiptool.kommo.com/api/v4/tasks', ...auth,
+      ...cuerpo(`${ciclo}.tareas`) }, credentials: CRED.kommo }), ...sigue },
+    { ...http(id(11), 'Retomes por WhatsApp (ciclo)', [1860, y], { parameters: { method: 'POST', url: 'https://wiptool.kommo.com/api/v2/salesbot/run', ...auth,
+      ...cuerpo(`${ciclo}.bots`) }, credentials: CRED.kommo }), ...sigue },
+    { ...http(id(12), 'Registrar retomes (ciclo)', [2020, y], { parameters: { method: 'POST', url: `${SUPABASE}/rest/v1/agente_mensajes`, ...auth,
+      sendHeaders: true, headerParameters: { parameters: [{ name: 'Prefer', value: 'return=minimal' }] }, ...cuerpo(`${ciclo}.filas`) },
+      credentials: CRED.supabase }), ...sigue },
+    codigoTexto(id(13), 'Contactos Brevo (ciclo)', [2180, y], CV['Contactos Brevo (ciclo)']),
+    { ...http(id(14), 'Nutrición Brevo (ciclo)', [2340, y], { parameters: { method: 'POST', url: 'https://api.brevo.com/v3/contacts', ...auth,
+      ...cuerpo('$json') }, credentials: CRED.brevo }), onError: 'continueRegularOutput' },
+  ];
+  const nombres = nodos.map((x) => x.name);
+  const conexiones = Object.fromEntries(nombres.slice(0, -1).map((nm, i) => [nm, a(nombres[i + 1])]));
+  return { nodos, conexiones, inicio: ['Trabajos ciclo'] };
+})();
+// Calificador (calificador.js): Claude lee las conversaciones con mensajes nuevos y llena la calificación en Kommo.
+const CALIFICADOR = (() => {
+  if (!CRED_CLAUDE) return { nodos: [], conexiones: {}, inicio: [] };
+  const CA = partes('calificador.js');
+  const id = (k) => `a1f0c0de-08${String(k).padStart(2, '0')}-4000-8000-0000000008${String(k).padStart(2, '0')}`;
+  const auth = { authentication: 'genericCredentialType', genericAuthType: 'httpHeaderAuth' };
+  const cuerpo = (expr) => ({ sendBody: true, specifyBody: 'json', jsonBody: `={{ JSON.stringify(${expr}) }}` });
+  const preparar = (js) => js.split('__SUPABASE__').join(SUPABASE);
+  const porElemento = (k, name, x, js) => ({ id: id(k), name, type: 'n8n-nodes-base.code', typeVersion: 2, position: [x, 2700],
+    parameters: { mode: 'runOnceForEachItem', jsCode: js } });
+  const y = 2700;
+  const nodos = [
+    codigoTexto(id(1), 'Trabajos calificador', [260, y], preparar(CA['Trabajos calificador'])),
+    http(id(2), 'Mensajes recientes (calificador)', [420, y], { parameters: auth, credentials: CRED.supabase }),
+    codigoTexto(id(3), 'Pedidos calificador', [580, y], CA['Pedidos calificador']),
+    { ...http(id(4), 'Leads a calificar', [740, y], { parameters: auth, credentials: CRED.kommo }), alwaysOutputData: true, onError: 'continueRegularOutput' },
+    codigoTexto(id(5), 'Elegir a calificar', [900, y], preparar(CA['Elegir a calificar'])),
+    http(id(6), 'Historial (calificador)', [1060, y], { parameters: { ...auth, options: { ...lotes, response: { response: { responseFormat: 'text' } } } },
+      credentials: CRED.supabase }),
+    porElemento(7, 'Pedido a Claude (calificador)', 1220, CA['Pedido a Claude (calificador)']),
+    { ...http(id(8), 'Claude (calificador)', [1380, y], { parameters: { method: 'POST', url: 'https://api.anthropic.com/v1/messages',
+      authentication: 'predefinedCredentialType', nodeCredentialType: 'anthropicApi',
+      sendHeaders: true, headerParameters: { parameters: [{ name: 'anthropic-version', value: '2023-06-01' }] }, ...cuerpo('$json.pedido') },
+      credentials: CRED_CLAUDE }), onError: 'continueRegularOutput' },
+    porElemento(9, 'Calificación en Kommo', 1540, CA['Calificación en Kommo']),
+    { ...http(id(10), 'Guardar calificación', [1700, y], { parameters: { method: 'PATCH', url: 'https://wiptool.kommo.com/api/v4/leads', ...auth,
+      ...cuerpo('$json.cuerpo') }, credentials: CRED.kommo }), onError: 'continueRegularOutput' },
+  ];
+  const nombres = nodos.map((x) => x.name);
+  const conexiones = Object.fromEntries(nombres.slice(0, -1).map((nm, i) => [nm, a(nombres[i + 1])]));
+  return { nodos, conexiones, inicio: ['Trabajos calificador'] };
+})();
+const ARRANQUE = [...INICIOS.slice(0, -1), 'Trabajos anuncios Meta', ...F2.inicio, INICIOS[INICIOS.length - 1], ...SEGUIMIENTO.inicio, ...SINRESP.inicio, ...CALIFICADOR.inicio, ...CICLO.inicio];
 const f12 = {
   name: 'F12 · Carga del tablero (Google, Meta y TRM → Supabase)',
   nodes: [
@@ -365,6 +437,8 @@ const f12 = {
     ...SEGUIMIENTO.nodos,
     ...RECORDATORIO.nodos,
     ...SINRESP.nodos,
+    ...CALIFICADOR.nodos,
+    ...CICLO.nodos,
   ],
   connections: {
     'Cada hora': varios(...ARRANQUE),
@@ -374,6 +448,8 @@ const f12 = {
     ...SEGUIMIENTO.conexiones,
     ...RECORDATORIO.conexiones,
     ...SINRESP.conexiones,
+    ...CALIFICADOR.conexiones,
+    ...CICLO.conexiones,
     'Trabajos Google': a('Consultar Google'), 'Consultar Google': a('Filas Google'), 'Filas Google': a('Guardar en Supabase'),
     'Trabajos Meta': a('Consultar Meta'), 'Consultar Meta': a('Filas Meta'), 'Filas Meta': a('Guardar en Supabase'),
     'Trabajos TRM': a('Consultar TRM'), 'Consultar TRM': a('Filas TRM'), 'Filas TRM': a('Guardar en Supabase'),

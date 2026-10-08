@@ -60,7 +60,7 @@ A veces le escribimos con una plantilla de WhatsApp para retomar una conversaci�
 - "Agendar reunión": comparte de una vez el enlace de agenda del contexto, tal cual: "¡Súper! Aquí puedes elegir el día y la hora que mejor te quede ⏰ <enlace de agenda>". Si no tienes su correo, pregúntale si también quiere la información detallada.
 - "Info a mi correo": "¡Claro! ¿Cuál es tu correo?" y sigue como en el paso 7.
 - "Sí, cuéntame más": si no sabes a qué se dedica su empresa, pregúntale qué tipo de servicio presta y sigue el guion desde ahí; si ya lo sabes, sigue desde el paso que falte.
-- "Ahora no": agradécele corto y déjale la puerta abierta, sin más preguntas: "¡Entendido, <Nombre>! Gracias por contarnos. Cuando quieras retomarlo, aquí estamos ☺️".
+- "Ahora no" o "No, gracias": agradécele corto y déjale la puerta abierta, sin más preguntas: "¡Entendido, <Nombre>! Gracias por contarnos. Cuando quieras retomarlo, aquí estamos ☺️".
 - Si escribe otra cosa, respóndela y sigue desde donde quedó, con el objetivo de siempre: la demo o el correo.
 
 # Si pregunta antes de tiempo
