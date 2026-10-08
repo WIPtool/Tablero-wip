@@ -1,0 +1,433 @@
+{
+  "name": "F19 · Recordatorio de demo 20 min antes (Calendly y Google Calendar → WhatsApp)",
+  "nodes": [
+    {
+      "id": "f6f0c0de-0001-4000-8000-000000000001",
+      "name": "Cada hora (6 a 18 h)",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [
+        0,
+        0
+      ],
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "cronExpression",
+              "expression": "10 6-18 * * *"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "f6f0c0de-0002-4000-8000-000000000002",
+      "name": "Usuario Calendly",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        220,
+        0
+      ],
+      "parameters": {
+        "method": "GET",
+        "url": "https://api.calendly.com/users/me",
+        "options": {
+          "batching": {
+            "batch": {
+              "batchSize": 1,
+              "batchInterval": 300
+            }
+          }
+        },
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth"
+      },
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "0U9bkwTaH0qwcc9h",
+          "name": "Calendly (lectura)"
+        }
+      }
+    },
+    {
+      "id": "f6f0c0de-0003-4000-8000-000000000003",
+      "name": "Ventana de la demo",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        440,
+        0
+      ],
+      "parameters": {
+        "jsCode": "const desde = new Date(Date.now() + 20 * 60000).toISOString();\nconst hasta = new Date(Date.now() + 80 * 60000).toISOString();\nconst usuario = ($input.first().json.resource || {}).uri;\nif (!usuario) return [];\nreturn [{ json: { desde, hasta,\n  url: `https://api.calendly.com/scheduled_events?user=${encodeURIComponent(usuario)}&status=active&count=100&min_start_time=${encodeURIComponent(desde)}&max_start_time=${encodeURIComponent(hasta)}` } }];\n"
+      }
+    },
+    {
+      "id": "f6f0c0de-0004-4000-8000-000000000004",
+      "name": "Citas Calendly",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        660,
+        0
+      ],
+      "parameters": {
+        "method": "GET",
+        "url": "={{ $json.url }}",
+        "options": {
+          "batching": {
+            "batch": {
+              "batchSize": 1,
+              "batchInterval": 300
+            }
+          }
+        },
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth"
+      },
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "0U9bkwTaH0qwcc9h",
+          "name": "Calendly (lectura)"
+        }
+      },
+      "alwaysOutputData": true
+    },
+    {
+      "id": "f6f0c0de-0005-4000-8000-000000000005",
+      "name": "Pedido registro",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        770,
+        160
+      ],
+      "parameters": {
+        "jsCode": "// Las oportunidades de Kommo de esas citas (si no hay citas, una consulta que no trae nada, para seguir con Google Calendar).\nconst SUPABASE = 'https://tlpnkcroqenudzgiqzum.supabase.co';\nconst uris = ($input.first().json.collection || []).map((c) => c.uri);\nconst filtro = uris.length ? `in.(${uris.map((u) => '\"' + u + '\"').join(',')})` : 'eq.ninguno';\nreturn [{ json: { url: `${SUPABASE}/rest/v1/calendly_kommo?select=evento,kommo_lead_id&kommo_lead_id=not.is.null&evento=${encodeURIComponent(filtro)}` } }];\n"
+      }
+    },
+    {
+      "id": "f6f0c0de-0009-4000-8000-000000000009",
+      "name": "Registro citas (demo)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        880,
+        0
+      ],
+      "parameters": {
+        "method": "GET",
+        "url": "={{ $json.url }}",
+        "options": {
+          "batching": {
+            "batch": {
+              "batchSize": 1,
+              "batchInterval": 300
+            }
+          }
+        },
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth"
+      },
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "us3OmK2VUvuuu7t8",
+          "name": "Supabase (tablero)"
+        }
+      },
+      "executeOnce": true,
+      "alwaysOutputData": true
+    },
+    {
+      "id": "f6f0c0de-0010-4000-8000-000000000010",
+      "name": "Armar recordatorios 20 min",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1100,
+        0
+      ],
+      "parameters": {
+        "jsCode": "const BOT_DEMO_20 = 18044;\nconst CAMPO_ENLACE = 546606;\nconst leerKommo = (j) => { if (j && typeof j.data === 'string') { try { return JSON.parse(j.data); } catch (e) { return {}; } } return j || {}; };\nconst nodo = (n) => { try { return $(n).all().map((i) => i.json); } catch (e) { return []; } };\nconst hora = new Intl.DateTimeFormat('es-CO', { timeZone: 'America/Bogota', timeStyle: 'short' });\nconst porLead = new Map();\nconst enlaces = new Set();\nconst agregar = (lead_id, inicio, enlace, fuente) => {\n  if (!lead_id || !enlace || porLead.has(Number(lead_id))) return;\n  enlaces.add(enlace);\n  porLead.set(Number(lead_id), { lead_id: Number(lead_id), inicio, enlace, fuente,\n    envio: new Date(new Date(inicio).getTime() - 20 * 60000).toISOString(),\n    lead: [{ id: Number(lead_id), custom_fields_values: [{ field_id: CAMPO_ENLACE, values: [{ value: enlace }] }] }],\n    bot: [{ bot_id: BOT_DEMO_20, entity_id: Number(lead_id), entity_type: 2 }],\n    guardar: { lead_id: Number(lead_id), rol: 'agente', tipo: 'recordatorio', momento: new Date(new Date(inicio).getTime() - 20 * 60000).toISOString(),\n      texto: `Hola ✋ Tu demo con WIP empieza en 20 minutos (${hora.format(new Date(inicio))}). Conéctate aquí: ${enlace} ¿Nos confirmas tu asistencia? [Plantilla de WhatsApp con botones \"Sí, asistiré\" y \"Necesito reprogramar\"]` } });\n};\n// Calendly: solo las citas con enlace de videollamada (Meet, Zoom, Teams).\nconst citas = (nodo('Citas Calendly')[0] || {}).collection || [];\nconst registro = nodo('Registro citas (demo)').filter((r) => r.evento && r.kommo_lead_id);\nfor (const c of citas) {\n  const enlace = c.location && c.location.join_url;\n  const r = registro.find((x) => x.evento === c.uri);\n  if (r) agregar(r.kommo_lead_id, c.start_time, enlace, 'Calendly');\n}\n// Google Calendar: enlace de Meet (hangoutLink o conferenceData) o de Teams/Zoom en el lugar o la descripción.\nconst eventos = (nodo('Eventos Google Calendar')[0] || {}).items || [];\nconst contactos = nodo('Contacto en Kommo (demo)').map(leerKommo).flatMap((r) => (r._embedded && r._embedded.contacts) || []);\nconst correosDe = (c) => (c.custom_fields_values || []).filter((f) => f.field_code === 'EMAIL').flatMap((f) => f.values || []).map((v) => String(v.value).trim().toLowerCase());\nfor (const ev of eventos) {\n  if (ev.status === 'cancelled' || /calendly\\.com/i.test(ev.description || '')) continue;\n  const inicio = ev.start && ev.start.dateTime;\n  if (!inicio) continue; // eventos de todo el día\n  const video = ((ev.conferenceData && ev.conferenceData.entryPoints) || []).find((p) => p.entryPointType === 'video');\n  const texto = `${ev.location || ''} ${ev.description || ''}`;\n  const enlace = ev.hangoutLink || (video && video.uri) || (texto.match(/https:\\/\\/(?:teams\\.microsoft\\.com|teams\\.live\\.com|[\\w.-]*zoom\\.us)\\/[^\\s\"<>]+/i) || [])[0];\n  if (!enlace || enlaces.has(enlace)) continue;\n  for (const p of (ev.attendees || [])) {\n    const correo = String(p.email || '').trim().toLowerCase();\n    if (!correo || correo.endsWith('@wiptool.com') || p.responseStatus === 'declined') continue;\n    const contacto = contactos.find((c) => correosDe(c).includes(correo));\n    const leads = ((contacto && contacto._embedded && contacto._embedded.leads) || []).map((l) => Number(l.id));\n    if (leads.length) { agregar(Math.max(...leads), inicio, enlace, 'Google Calendar'); break; }\n  }\n}\nreturn [...porLead.values()].sort((x, y) => x.envio.localeCompare(y.envio)).map((json) => ({ json }));\n"
+      }
+    },
+    {
+      "id": "f6f0c0de-0011-4000-8000-000000000011",
+      "name": "Una por una",
+      "type": "n8n-nodes-base.splitInBatches",
+      "typeVersion": 3,
+      "position": [
+        1320,
+        0
+      ],
+      "parameters": {
+        "options": {}
+      }
+    },
+    {
+      "id": "f6f0c0de-0012-4000-8000-000000000012",
+      "name": "Esperar a 20 min antes",
+      "type": "n8n-nodes-base.wait",
+      "typeVersion": 1.1,
+      "position": [
+        1540,
+        120
+      ],
+      "webhookId": "f6f0c0de-0012-4000-8000-0000000c0de9",
+      "parameters": {
+        "resume": "specificTime",
+        "dateTime": "={{ $json.envio }}"
+      }
+    },
+    {
+      "id": "f6f0c0de-0013-4000-8000-000000000013",
+      "name": "Enlace en la oportunidad",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1760,
+        120
+      ],
+      "parameters": {
+        "method": "PATCH",
+        "url": "https://wiptool.kommo.com/api/v4/leads",
+        "options": {
+          "batching": {
+            "batch": {
+              "batchSize": 1,
+              "batchInterval": 300
+            }
+          }
+        },
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify($('Una por una').item.json.lead) }}"
+      },
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "wxfP9VZK9UBkShIS",
+          "name": "Kommo (lectura)"
+        }
+      }
+    },
+    {
+      "id": "f6f0c0de-0014-4000-8000-000000000014",
+      "name": "Guardar recordatorio",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1980,
+        120
+      ],
+      "parameters": {
+        "method": "POST",
+        "url": "https://tlpnkcroqenudzgiqzum.supabase.co/rest/v1/agente_mensajes",
+        "options": {
+          "batching": {
+            "batch": {
+              "batchSize": 1,
+              "batchInterval": 300
+            }
+          }
+        },
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Prefer",
+              "value": "return=minimal"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify($('Una por una').item.json.guardar) }}"
+      },
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "us3OmK2VUvuuu7t8",
+          "name": "Supabase (tablero)"
+        }
+      }
+    },
+    {
+      "id": "f6f0c0de-0015-4000-8000-000000000015",
+      "name": "Enviar por WhatsApp",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        2200,
+        120
+      ],
+      "parameters": {
+        "method": "POST",
+        "url": "https://wiptool.kommo.com/api/v2/salesbot/run",
+        "options": {
+          "batching": {
+            "batch": {
+              "batchSize": 1,
+              "batchInterval": 300
+            }
+          }
+        },
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify($('Una por una').item.json.bot) }}"
+      },
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "wxfP9VZK9UBkShIS",
+          "name": "Kommo (lectura)"
+        }
+      }
+    }
+  ],
+  "connections": {
+    "Cada hora (6 a 18 h)": {
+      "main": [
+        [
+          {
+            "node": "Usuario Calendly",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Usuario Calendly": {
+      "main": [
+        [
+          {
+            "node": "Ventana de la demo",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Ventana de la demo": {
+      "main": [
+        [
+          {
+            "node": "Citas Calendly",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Citas Calendly": {
+      "main": [
+        [
+          {
+            "node": "Pedido registro",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Pedido registro": {
+      "main": [
+        [
+          {
+            "node": "Registro citas (demo)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Registro citas (demo)": {
+      "main": [
+        [
+          {
+            "node": "Armar recordatorios 20 min",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Armar recordatorios 20 min": {
+      "main": [
+        [
+          {
+            "node": "Una por una",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Una por una": {
+      "main": [
+        [],
+        [
+          {
+            "node": "Esperar a 20 min antes",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Esperar a 20 min antes": {
+      "main": [
+        [
+          {
+            "node": "Enlace en la oportunidad",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Enlace en la oportunidad": {
+      "main": [
+        [
+          {
+            "node": "Guardar recordatorio",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Guardar recordatorio": {
+      "main": [
+        [
+          {
+            "node": "Enviar por WhatsApp",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Enviar por WhatsApp": {
+      "main": [
+        [
+          {
+            "node": "Una por una",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "timezone": "America/Bogota"
+  },
+  "pinData": {}
+}

@@ -7,7 +7,7 @@
 //  - f15-formularios-kommo.json: recibe los formularios del sitio (/api/contact) y los crea en Kommo con su Origen (F1).
 //  - f16-agente-whatsapp.json: agente de WhatsApp con Claude (F7); lo llama el webhook de Kommo "mensaje entrante".
 //    Necesita CRED_CLAUDE=<id de la credencial Anthropic "Claude (agente WhatsApp)">; con ella F12 también lleva el agente de seguimiento.
-//  - f19-recordatorio-demo.json: recordatorio de la demo virtual 20 min antes (recordatorio-demo.js); necesita BOT_DEMO_20 y, para
+//  - f19-recordatorio-demo.json: recordatorio de la demo virtual 20 min antes (recordatorio-demo.js); para
 //    Google Calendar, CRED_GCAL=<id de la credencial "Google Calendar (lectura)">.
 // Uso: AGENTE_EN_VIVO=1 SEGUIMIENTO_EN_VIVO=1 CRED_CALENDLY=0U9bkwTaH0qwcc9h CRED_CLAUDE=lI6pyiToLgn65AwG node n8n/armar-flujo.cjs  (ids de las credenciales "Calendly (lectura)" y "Claude (agente WhatsApp)" en n8n)
 // Las credenciales se referencian por id (se crean a mano en n8n; las claves nunca van en este repositorio).
@@ -36,8 +36,8 @@ const BOT_RESPUESTA = 16206;    // Salesbot "Agente WhatsApp: enviar respuesta" 
 const BOT_PLANTILLA = 16850;    // Salesbot "Agente WhatsApp: plantilla retomar contacto" (plantilla de WhatsApp 8720, aprobada por Meta)
 const BOT_RECORDATORIO = 16852; // Salesbot "Agente WhatsApp: plantilla recordatorio" (plantilla de WhatsApp 8722, aprobada por Meta)
 // Recordatorio 20 min antes de la demo (F19): Salesbot con la plantilla 9568 "Recordatorio demo 20 min WIP" (botones Sí, asistiré /
-// Necesito reprogramar) y el campo de la oportunidad que llena su variable. Sin Salesbot (0) no se arma F19.
-const BOT_DEMO_20 = Number(process.env.BOT_DEMO_20 || 0);
+// Necesito reprogramar) y el campo de la oportunidad que llena su variable.
+const BOT_DEMO_20 = 18044;    // Salesbot "Agente WhatsApp: recordatorio demo 20 min" (plantilla 9568, aprobada por Meta)
 const CAMPO_ENLACE = 546606;    // Kommo · oportunidad: "Enlace de reunión"
 // Google Calendar (lectura) para F19: credencial OAuth de n8n (calendar.readonly); sin ella F19 solo mira Calendly.
 const CRED_GCAL = process.env.CRED_GCAL ? { googleCalendarOAuth2Api: { id: process.env.CRED_GCAL, name: 'Google Calendar (lectura)' } } : null;
@@ -565,5 +565,4 @@ if (CRED_CALENDLY && BOT_DEMO_20) {
 }
 fs.writeFileSync(path.join(__dirname, 'f14-google-ads.json'), JSON.stringify(f14, null, 2));
 console.log('ok · webhook de Google Ads: https://wiptool.app.n8n.cloud/webhook/' + RUTA_GADS);
-if (!BOT_DEMO_20) console.log('aviso · F19 no se armó: falta BOT_DEMO_20=<id del Salesbot>');
 console.log('ok · webhook de Brevo (F18): https://wiptool.app.n8n.cloud/webhook/' + RUTA_BREVO);
