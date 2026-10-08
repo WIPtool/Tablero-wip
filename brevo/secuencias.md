@@ -2,6 +2,8 @@
 
 Fuente de verdad del texto, los tiempos y los enlaces de las dos secuencias del proceso comercial. Lo que se cambie en Brevo se actualiza aquí.
 
+Cargado en Brevo el 2026-10-07. Plantillas: Info solicitada 3, 4, 5, 6 y 24; Nutrición 29, 30, 31 y 32 a 38 (nut-4 a nut-10).
+
 ## Cómo funciona el proceso
 
 ```
@@ -44,15 +46,15 @@ Disparador: contacto añadido a la lista "Info solicitada" (#9). Remitente: Meli
 
 | # | Día | Asunto | Botón principal | Botón secundario |
 |---|---|---|---|---|
-| info-1 | 0 | La información que pediste de WIP 🚀 | Ver planes y precios (`/planes/email`) | Agendar mi demo (`agenda-email?c=info-1`) |
+| info-1 | 0 | Tus servicios están a punto de cambiar🚀 | Ver planes y precios (`/planes/email`) | Agendar mi demo (`agenda-email?c=info-1`) |
 | info-2 | 3 | Así resolvió su operación una empresa como la tuya | Agendar mi demo (`agenda-email?c=info-2`) | Hablar con un asesor (`wa-email?c=info-2`) |
 | info-3 | 8 | ¿Y si mi equipo no lo usa? | Agendar mi demo (`agenda-email?c=info-3`) | Hablar con un asesor (`wa-email?c=info-3`) |
 | info-4 | 15 | Así se ve un lunes cuando ya no operas a ciegas | Quiero ver mi lunes así (`agenda-email?c=info-4`) | Hablar con un asesor (`wa-email?c=info-4`) |
-| info-5 | 22 | ¿Tu colaborador ya llegó al servicio de hoy? | Hablar con un asesor (`wa-email?c=info-5`) | Agendar mi demo (`agenda-email?c=info-5`) |
+| info-5 | 22 | ¿Tu colaborador no ha llegado al servicio de hoy? 😥 | Hablar con un asesor (`wa-email?c=info-5`) | Agendar mi demo (`agenda-email?c=info-5`) |
 
 ### info-1 · día 0
-**Asunto:** La información que pediste de WIP 🚀
-**Vista previa:** Los planes y cómo resolvemos lo que nos contaste.
+**Asunto:** Tus servicios están a punto de cambiar🚀
+**Vista previa:** La información que pediste de Wip
 
 Hola{% if contact.NOMBRE %} {{ contact.NOMBRE }}{% endif %} 👋
 
@@ -123,7 +125,7 @@ No es una idea lejana. Es lo que pasa cuando resuelves {{ contact.RETO_PRINCIPAL
 **[Prefiero hablar con un asesor →]** `https://www.wiptool.com/wa-email?c=info-4`
 
 ### info-5 · día 22
-**Asunto:** ¿Tu colaborador ya llegó al servicio de hoy?
+**Asunto:** ¿Tu colaborador no ha llegado al servicio de hoy? 😥
 **Vista previa:** Haz la cuenta de cuántas veces lo preguntas al día.
 
 Hola{% if contact.NOMBRE %} {{ contact.NOMBRE }}{% endif %} 👋
@@ -147,7 +149,7 @@ Disparador: contacto añadido a la lista "Nutricion - General" (#21). Remitente:
 
 | # | Espera antes | Día | Asunto | Botón principal | Botón secundario |
 |---|---|---|---|---|---|
-| nut-1 | 0 | 0 | Excel, WhatsApp y llamadas: así se ve una operación a ciegas | Conocer WIP (`/equipos/email`) | Agendar una demo (`agenda-email?c=nut-1`) |
+| nut-1 | 0 | 0 | Excel, WhatsApp y llamadas para manejar tus servicios: así se ve una operación a ciegas | Conocer WIP (`/equipos/email`) | Agendar una demo (`agenda-email?c=nut-1`) |
 | nut-2 | 7 días | 7 | Deja de llamar a tu equipo para saber "cómo va" el servicio | Agendar una demo (`agenda-email?c=nut-2`) | Hablar con un asesor (`wa-email?c=nut-2`) |
 | nut-3 | 10 días | 17 | Asignación inteligente de servicios a tu equipo 🚀 | Agendar una demo (`agenda-email?c=nut-3`) | Hablar con un asesor (`wa-email?c=nut-3`) |
 | nut-4 | 10 días | 27 | Que tu equipo sepa qué cobrar, sin hacer cuentas | Agendar una demo (`agenda-email?c=nut-4`) | Hablar con un asesor (`wa-email?c=nut-4`) |
@@ -159,7 +161,7 @@ Disparador: contacto añadido a la lista "Nutricion - General" (#21). Remitente:
 | nut-10 | 21 días | 114 | ¿Te sigo escribiendo? | Sí, quiero ver WIP (`agenda-email?c=nut-10`) | Hablar con un asesor (`wa-email?c=nut-10`) |
 
 ### nut-1 · día 0
-**Asunto:** Excel, WhatsApp y llamadas: así se ve una operación a ciegas
+**Asunto:** Excel, WhatsApp y llamadas para manejar tus servicios: así se ve una operación a ciegas
 **Vista previa:** Las tres herramientas que usan casi todas las empresas de servicios.
 
 Hola{% if contact.NOMBRE %} {{ contact.NOMBRE }}{% endif %} 👋
