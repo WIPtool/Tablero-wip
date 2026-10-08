@@ -28,9 +28,9 @@ export async function PaginaSeo({ id, sitio, rango }: { id: string; sitio: strin
       <Rejilla>
         <Tarjeta titulo="Clics e impresiones por día">
           <Leyenda items={[{ etiqueta: 'Clics', color: 'var(--serie-1)' }, { etiqueta: 'Impresiones', color: 'var(--serie-2)' }]} />
-          <GraficaPaneles serie={d.serie} paneles={[
+          <GraficaPaneles juntos alto={240} serie={d.serie} paneles={[
+            { campo: 'impresiones', etiqueta: 'Impresiones', forma: 'linea', color: 'var(--serie-2)', area: true },
             { campo: 'clics', etiqueta: 'Clics', forma: 'linea', color: 'var(--serie-1)' },
-            { campo: 'impresiones', etiqueta: 'Impresiones', forma: 'linea', color: 'var(--serie-2)' },
           ]} />
         </Tarjeta>
         <Tarjeta titulo="Búsquedas que nos traen visitas" col={7}>
