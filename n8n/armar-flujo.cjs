@@ -36,6 +36,11 @@ const BOT_RECORDATORIO = 16852; // Salesbot "Agente WhatsApp: plantilla recordat
 const MODO_PRUEBA = process.env.AGENTE_EN_VIVO !== '1';
 // Seguimiento: sin SEGUIMIENTO_EN_VIVO=1 solo guarda en Supabase los mensajes que propone (borrador), sin enviarlos.
 const SEGUIMIENTO_EN_VIVO = process.env.SEGUIMIENTO_EN_VIVO === '1';
+// Correo que consigue el agente: lista "Info solicitada" de Brevo (dispara la secuencia) y campos de la oportunidad en Kommo.
+const LISTA_INFO = 9;            // Brevo · lista "Info solicitada" (automatización "Pymes - Info solicitada")
+const CAMPO_SECUENCIA = 537462;  // Kommo · oportunidad: "Secuencia Brevo" (Info solicitada / Nutrición / Desuscrito)
+const ENUM_INFO = 439040;        // "Info solicitada"
+const CAMPO_RETO = 537464;       // Kommo · oportunidad: "Reto"
 // Ruta del webhook que llama el script de Google Ads (difícil de adivinar; no da acceso a nada, solo recibe cifras).
 const RUTA_GADS = 'gads-7c1e4b9a2f6d48e3a51c';
 
@@ -405,7 +410,9 @@ if (CRED_CLAUDE) {
         sendHeaders: true, headerParameters: { parameters: [{ name: 'anthropic-version', value: '2023-06-01' }] }, ...cuerpoJson('$json.pedido') },
         credentials: CRED_CLAUDE }),
       codigoTexto(id(9), 'Respuesta de Claude', [1600, 0], conComun(AGENTE['Respuesta de Claude'])
-        .split('__CAMPO_RESPUESTA__').join(String(CAMPO_RESPUESTA)).split('__BOT_RESPUESTA__').join(String(BOT_RESPUESTA))),
+        .split('__CAMPO_RESPUESTA__').join(String(CAMPO_RESPUESTA)).split('__BOT_RESPUESTA__').join(String(BOT_RESPUESTA))
+        .split('__LISTA_INFO__').join(String(LISTA_INFO)).split('__CAMPO_SECUENCIA__').join(String(CAMPO_SECUENCIA))
+        .split('__ENUM_INFO__').join(String(ENUM_INFO)).split('__CAMPO_RETO__').join(String(CAMPO_RETO))),
       http(id(10), 'Escribir respuesta en Kommo', [1800, 0], { parameters: { method: 'PATCH', url: 'https://wiptool.kommo.com/api/v4/leads', ...auth,
         ...cuerpoJson('$json.kommo') }, credentials: CRED.kommo }),
       http(id(11), 'Enviar por WhatsApp', [2000, 0], { parameters: { method: 'POST', url: 'https://wiptool.kommo.com/api/v2/salesbot/run', ...auth,
@@ -419,12 +426,26 @@ if (CRED_CLAUDE) {
         ...cuerpoJson(`${respuesta}.nota`) }, credentials: CRED.kommo }),
       { ...http(id(16), 'Correo de traspaso', [3000, 0], { parameters: { method: 'POST', url: 'https://api.brevo.com/v3/smtp/email', ...auth,
         ...cuerpoJson(`${respuesta}.correo`) }, credentials: CRED.brevo }), onError: 'continueRegularOutput' },
+      // Si la persona dio su correo: entra a la secuencia de Brevo y queda marcado en Kommo.
+      codigoTexto(id(20), 'Solo si dio correo', [2400, 200], `return ${respuesta}.brevo ? [{ json: {} }] : [];
+`),
+      http(id(21), 'Contacto en Brevo', [2600, 200], { parameters: { method: 'POST', url: 'https://api.brevo.com/v3/contacts', ...auth,
+        ...cuerpoJson(`${respuesta}.brevo.contacto`) }, credentials: CRED.brevo }),
+      http(id(22), 'Secuencia en Kommo', [2800, 200], { parameters: { method: 'PATCH', url: 'https://wiptool.kommo.com/api/v4/leads', ...auth,
+        ...cuerpoJson(`${respuesta}.brevo.lead`) }, credentials: CRED.kommo }),
+      { ...http(id(23), 'Correo en el contacto', [3000, 200], { parameters: { method: 'PATCH', url: 'https://wiptool.kommo.com/api/v4/contacts', ...auth,
+        ...cuerpoJson(`${respuesta}.brevo.contacto_kommo`) }, credentials: CRED.kommo }), onError: 'continueRegularOutput' },
+      http(id(24), 'Nota de la secuencia', [3200, 200], { parameters: { method: 'POST', url: 'https://wiptool.kommo.com/api/v4/leads/notes', ...auth,
+        ...cuerpoJson(`${respuesta}.brevo.nota`) }, credentials: CRED.kommo }),
     ],
     connections: {
       'Mensaje de Kommo': a('Mensaje entrante'), 'Mensaje entrante': a('Guardar mensaje'), 'Guardar mensaje': a('Esperar'), Esperar: a('Historial'),
       Historial: a('Lead en Kommo'), 'Lead en Kommo': a('Anuncio a buscar'), 'Anuncio a buscar': a('Anuncio de Meta'), 'Anuncio de Meta': a('Mensajes enviados'), 'Mensajes enviados': a('Decidir y preguntar a Claude'), 'Decidir y preguntar a Claude': a('Claude'),
       Claude: a('Respuesta de Claude'), 'Respuesta de Claude': a('Escribir respuesta en Kommo'), 'Escribir respuesta en Kommo': a('Enviar por WhatsApp'),
-      'Enviar por WhatsApp': a('Guardar respuesta'), 'Guardar respuesta': a('Solo si pasa a persona'), 'Solo si pasa a persona': a('Tarea en Kommo'),
+      'Enviar por WhatsApp': a('Guardar respuesta'),
+      'Guardar respuesta': { main: [[{ node: 'Solo si pasa a persona', type: 'main', index: 0 }, { node: 'Solo si dio correo', type: 'main', index: 0 }]] },
+      'Solo si dio correo': a('Contacto en Brevo'), 'Contacto en Brevo': a('Secuencia en Kommo'), 'Secuencia en Kommo': a('Correo en el contacto'),
+      'Correo en el contacto': a('Nota de la secuencia'), 'Solo si pasa a persona': a('Tarea en Kommo'),
       'Tarea en Kommo': a('Nota de traspaso'), 'Nota de traspaso': a('Correo de traspaso'),
     },
     settings: { executionOrder: 'v1', timezone: 'America/Bogota' },

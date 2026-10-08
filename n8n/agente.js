@@ -161,7 +161,9 @@ const herramienta = {
         type: 'object', description: 'Lo que la persona dijo de su operación (vacío si no lo dijo).',
         properties: { nombre: { type: 'string' }, empresa: { type: 'string' }, pais: { type: 'string' }, tipo_operacion: { type: 'string' },
           equipo: { type: 'string', description: 'propio, red de terceros o ambos' }, herramienta_actual: { type: 'string' },
-          reto: { type: 'string' }, servicios_mes: { type: 'string' }, correo: { type: 'string' }, quiere_reunion: { type: 'boolean' } },
+          reto: { type: 'string' },
+          reto_correo: { type: 'string', description: 'El reto como frase corta en minúscula que complete "tu reto principal es ___", sin punto final. Ej.: "manejar todo por Excel y WhatsApp", "no tener visibilidad en tiempo real de tus servicios", "los errores y la pérdida de tiempo en las asignaciones".' },
+          servicios_mes: { type: 'string' }, correo: { type: 'string', description: 'El correo que la persona escribió, tal cual.' }, quiere_reunion: { type: 'boolean' } },
       },
     },
     required: ['respuesta', 'pasar_a_persona'],
@@ -188,7 +190,29 @@ const d = x.datos || {};
 const datos = [d.nombre && `Nombre: ${d.nombre}`, d.empresa && `Empresa: ${d.empresa}`, d.pais && `País: ${d.pais}`,
   d.tipo_operacion && `Operación: ${d.tipo_operacion}`, d.equipo && `Equipo: ${d.equipo}`, d.herramienta_actual && `Herramienta actual: ${d.herramienta_actual}`,
   d.reto && `Reto: ${d.reto}`, d.servicios_mes && `Servicios al mes: ${d.servicios_mes}`, d.correo && `Correo: ${d.correo}`].filter(Boolean).join('\n');
+// Correo para Brevo: la primera vez que la persona da un correo válido entra a la lista "Info solicitada" (secuencia de correos)
+// con su nombre, empresa y reto; en Kommo queda la secuencia, el reto, el correo en el contacto y una nota.
+const LISTA_INFO = __LISTA_INFO__;
+const CAMPO_SECUENCIA = __CAMPO_SECUENCIA__;
+const ENUM_INFO = __ENUM_INFO__;
+const CAMPO_RETO = __CAMPO_RETO__;
+const lead = leerKommo($('Lead en Kommo').first().json);
+const yaEnSecuencia = (lead.custom_fields_values || []).some((f) => f.field_id === CAMPO_SECUENCIA && (f.values || []).length);
+const correoCliente = String(d.correo || '').trim().toLowerCase();
+const contacto = ((lead._embedded && lead._embedded.contacts) || [])[0];
+// RETO_PRINCIPAL va dentro de frases de los correos ("tu reto principal es ___"): sin punto final y con un valor por defecto.
+const retoCorreo = String(d.reto_correo || '').trim().replace(/[.。]+$/, '') || 'tener el control de tus servicios en tiempo real';
+const atributos = Object.fromEntries(Object.entries({ NOMBRE: d.nombre, NOMBRE_EMPRESA: d.empresa, RETO_PRINCIPAL: retoCorreo })
+  .filter(([, v]) => v && String(v).trim()).map(([k, v]) => [k, String(v).trim()]));
+const brevo = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(correoCliente) && !yaEnSecuencia ? {
+  contacto: { email: correoCliente, attributes: atributos, listIds: [LISTA_INFO], updateEnabled: true },
+  lead: [{ id: ctx.lead_id, custom_fields_values: [{ field_id: CAMPO_SECUENCIA, values: [{ enum_id: ENUM_INFO }] },
+    ...(d.reto ? [{ field_id: CAMPO_RETO, values: [{ value: String(d.reto).slice(0, 250) }] }] : [])] }],
+  contacto_kommo: contacto ? [{ id: contacto.id, custom_fields_values: [{ field_code: 'EMAIL', values: [{ value: correoCliente, enum_code: 'WORK' }] }] }] : [],
+  nota: [{ entity_id: ctx.lead_id, note_type: 'common', params: { text: `Meli consiguió el correo ${correoCliente} y la persona entró a la secuencia "Info solicitada" de Brevo.\nReto para los correos: ${retoCorreo}${datos ? '\n' + datos : ''}` } }],
+} : null;
 return [{ json: {
+  brevo,
   lead_id: ctx.lead_id, texto, traspaso, responsable: ctx.responsable,
   kommo: [{ id: ctx.lead_id, custom_fields_values: [{ field_id: CAMPO_RESPUESTA, values: [{ value: texto }] }],
     ...(traspaso ? { tags_to_add: [{ name: 'Atender persona' }] } : {}) }],
