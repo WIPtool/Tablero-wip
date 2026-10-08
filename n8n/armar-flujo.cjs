@@ -449,6 +449,15 @@ if (CRED_CLAUDE) {
         ...cuerpoJson(`${respuesta}.nota`) }, credentials: CRED.kommo }),
       { ...http(id(16), 'Correo de traspaso', [3000, 0], { parameters: { method: 'POST', url: 'https://api.brevo.com/v3/smtp/email', ...auth,
         ...cuerpoJson(`${respuesta}.correo`) }, credentials: CRED.brevo }), onError: 'continueRegularOutput' },
+      // Botón "Necesito reprogramar" del recordatorio de la demo (F19): tarea, nota y correo, en cualquier etapa.
+      codigoTexto(id(25), 'Pide reprogramar', [1100, -200], AGENTE['Pide reprogramar'].split('const lead = leerKommo').join(
+        AGENTE['Común del agente'].split('\n').find((l) => l.startsWith('const leerKommo')) + '\nconst lead = leerKommo')),
+      http(id(26), 'Tarea reprogramar', [1300, -200], { parameters: { method: 'POST', url: 'https://wiptool.kommo.com/api/v4/tasks', ...auth,
+        ...cuerpoJson("$('Pide reprogramar').first().json.tarea") }, credentials: CRED.kommo }),
+      http(id(27), 'Nota reprogramar', [1500, -200], { parameters: { method: 'POST', url: 'https://wiptool.kommo.com/api/v4/leads/notes', ...auth,
+        ...cuerpoJson("$('Pide reprogramar').first().json.nota") }, credentials: CRED.kommo }),
+      { ...http(id(28), 'Correo reprogramar', [1700, -200], { parameters: { method: 'POST', url: 'https://api.brevo.com/v3/smtp/email', ...auth,
+        ...cuerpoJson("$('Pide reprogramar').first().json.correo") }, credentials: CRED.brevo }), onError: 'continueRegularOutput' },
       // Si la persona dio su correo: entra a la secuencia de Brevo y queda marcado en Kommo.
       codigoTexto(id(20), 'Solo si dio correo', [2400, 200], `return ${respuesta}.brevo ? [{ json: {} }] : [];
 `),
@@ -463,7 +472,8 @@ if (CRED_CLAUDE) {
     ],
     connections: {
       'Mensaje de Kommo': a('Mensaje entrante'), 'Mensaje entrante': a('Guardar mensaje'), 'Guardar mensaje': a('Esperar'), Esperar: a('Historial'),
-      Historial: a('Lead en Kommo'), 'Lead en Kommo': a('Anuncio a buscar'), 'Anuncio a buscar': a('Anuncio de Meta'), 'Anuncio de Meta': a('Mensajes enviados'), 'Mensajes enviados': a('Decidir y preguntar a Claude'), 'Decidir y preguntar a Claude': a('Claude'),
+      Historial: a('Lead en Kommo'), 'Lead en Kommo': varios('Anuncio a buscar', 'Pide reprogramar'),
+      'Pide reprogramar': a('Tarea reprogramar'), 'Tarea reprogramar': a('Nota reprogramar'), 'Nota reprogramar': a('Correo reprogramar'), 'Anuncio a buscar': a('Anuncio de Meta'), 'Anuncio de Meta': a('Mensajes enviados'), 'Mensajes enviados': a('Decidir y preguntar a Claude'), 'Decidir y preguntar a Claude': a('Claude'),
       Claude: a('Respuesta de Claude'), 'Respuesta de Claude': a('Escribir respuesta en Kommo'), 'Escribir respuesta en Kommo': a('Enviar por WhatsApp'),
       'Enviar por WhatsApp': a('Guardar respuesta'),
       'Guardar respuesta': { main: [[{ node: 'Solo si pasa a persona', type: 'main', index: 0 }, { node: 'Solo si dio correo', type: 'main', index: 0 }]] },

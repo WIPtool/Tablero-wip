@@ -517,6 +517,119 @@
       "onError": "continueRegularOutput"
     },
     {
+      "id": "d4f0c0de-0025-4000-8000-000000000025",
+      "name": "Pide reprogramar",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1100,
+        -200
+      ],
+      "parameters": {
+        "jsCode": "// Botón \"Necesito reprogramar\" del recordatorio de la demo (F19): tarea urgente para el responsable de la oportunidad, nota y\n// correo a comercial@ (la demo empieza en minutos). Va aparte del agente, así que funciona en cualquier etapa.\nconst msg = $('Mensaje entrante').first().json;\nif (!/^\\s*necesito reprogramar\\s*[.!]?\\s*$/i.test(msg.texto)) return [];\nconst leerKommo = (j) => { if (j && typeof j.data === 'string') { try { return JSON.parse(j.data); } catch (e) { return {}; } } return j || {}; };\nconst lead = leerKommo($input.first().json);\nconst nombre = lead.name || 'oportunidad ' + msg.lead_id;\nreturn [{ json: {\n  tarea: [{ entity_id: msg.lead_id, entity_type: 'leads', responsible_user_id: lead.responsible_user_id, task_type_id: 1,\n    text: 'Reprogramar la demo: la persona tocó \"Necesito reprogramar\" en el recordatorio de WhatsApp. Escríbele para acordar un nuevo horario.',\n    complete_till: Math.floor(Date.now() / 1000) + 15 * 60 }],\n  nota: [{ entity_id: msg.lead_id, note_type: 'common', params: { text: 'Pidió reprogramar la demo desde el recordatorio de WhatsApp (botón \"Necesito reprogramar\").' } }],\n  correo: { sender: { name: 'Agente WIP', email: 'comercial@wiptool.com' }, to: [{ email: 'comercial@wiptool.com' }],\n    subject: `Reprogramar demo: ${nombre}`,\n    htmlContent: `<p>${String(nombre).replace(/</g, '&lt;')} tocó <b>Necesito reprogramar</b> en el recordatorio de la demo por WhatsApp.</p><p>Escríbele para acordar un nuevo horario.</p><p><a href=\"https://wiptool.kommo.com/leads/detail/${msg.lead_id}\">Abrir en Kommo</a></p>` },\n} }];\n"
+      }
+    },
+    {
+      "id": "d4f0c0de-0026-4000-8000-000000000026",
+      "name": "Tarea reprogramar",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1300,
+        -200
+      ],
+      "parameters": {
+        "method": "POST",
+        "url": "https://wiptool.kommo.com/api/v4/tasks",
+        "options": {
+          "batching": {
+            "batch": {
+              "batchSize": 1,
+              "batchInterval": 300
+            }
+          }
+        },
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify($('Pide reprogramar').first().json.tarea) }}"
+      },
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "wxfP9VZK9UBkShIS",
+          "name": "Kommo (lectura)"
+        }
+      }
+    },
+    {
+      "id": "d4f0c0de-0027-4000-8000-000000000027",
+      "name": "Nota reprogramar",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1500,
+        -200
+      ],
+      "parameters": {
+        "method": "POST",
+        "url": "https://wiptool.kommo.com/api/v4/leads/notes",
+        "options": {
+          "batching": {
+            "batch": {
+              "batchSize": 1,
+              "batchInterval": 300
+            }
+          }
+        },
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify($('Pide reprogramar').first().json.nota) }}"
+      },
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "wxfP9VZK9UBkShIS",
+          "name": "Kommo (lectura)"
+        }
+      }
+    },
+    {
+      "id": "d4f0c0de-0028-4000-8000-000000000028",
+      "name": "Correo reprogramar",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1700,
+        -200
+      ],
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.brevo.com/v3/smtp/email",
+        "options": {
+          "batching": {
+            "batch": {
+              "batchSize": 1,
+              "batchInterval": 300
+            }
+          }
+        },
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify($('Pide reprogramar').first().json.correo) }}"
+      },
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "eOtWousRPiKJpfVf",
+          "name": "Brevo (lectura)"
+        }
+      },
+      "onError": "continueRegularOutput"
+    },
+    {
       "id": "d4f0c0de-0020-4000-8000-000000000020",
       "name": "Solo si dio correo",
       "type": "n8n-nodes-base.code",
@@ -724,6 +837,44 @@
         [
           {
             "node": "Anuncio a buscar",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Pide reprogramar",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Pide reprogramar": {
+      "main": [
+        [
+          {
+            "node": "Tarea reprogramar",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Tarea reprogramar": {
+      "main": [
+        [
+          {
+            "node": "Nota reprogramar",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Nota reprogramar": {
+      "main": [
+        [
+          {
+            "node": "Correo reprogramar",
             "type": "main",
             "index": 0
           }

@@ -103,6 +103,23 @@ if (!texto) return [];
 return [{ json: { lead_id: lead, mensaje_id: String(m.id || `${lead}-${m.created_at || Date.now()}`), talk_id: String(m.talk_id || ''), texto,
   momento: m.created_at ? new Date(Number(m.created_at) * 1000).toISOString() : new Date().toISOString() } }];
 
+// == Pide reprogramar (Code, una vez para todos los elementos)
+// Botón "Necesito reprogramar" del recordatorio de la demo (F19): tarea urgente para el responsable de la oportunidad, nota y
+// correo a comercial@ (la demo empieza en minutos). Va aparte del agente, así que funciona en cualquier etapa.
+const msg = $('Mensaje entrante').first().json;
+if (!/^\s*necesito reprogramar\s*[.!]?\s*$/i.test(msg.texto)) return [];
+const lead = leerKommo($input.first().json);
+const nombre = lead.name || 'oportunidad ' + msg.lead_id;
+return [{ json: {
+  tarea: [{ entity_id: msg.lead_id, entity_type: 'leads', responsible_user_id: lead.responsible_user_id, task_type_id: 1,
+    text: 'Reprogramar la demo: la persona tocó "Necesito reprogramar" en el recordatorio de WhatsApp. Escríbele para acordar un nuevo horario.',
+    complete_till: Math.floor(Date.now() / 1000) + 15 * 60 }],
+  nota: [{ entity_id: msg.lead_id, note_type: 'common', params: { text: 'Pidió reprogramar la demo desde el recordatorio de WhatsApp (botón "Necesito reprogramar").' } }],
+  correo: { sender: { name: 'Agente WIP', email: 'comercial@wiptool.com' }, to: [{ email: 'comercial@wiptool.com' }],
+    subject: `Reprogramar demo: ${nombre}`,
+    htmlContent: `<p>${String(nombre).replace(/</g, '&lt;')} tocó <b>Necesito reprogramar</b> en el recordatorio de la demo por WhatsApp.</p><p>Escríbele para acordar un nuevo horario.</p><p><a href="https://wiptool.kommo.com/leads/detail/${msg.lead_id}">Abrir en Kommo</a></p>` },
+} }];
+
 // == Anuncio a buscar (Code, una vez para todos los elementos)
 // Si la oportunidad llegó por un anuncio de Meta (utm_campaign y utm_content), pide su texto a Supabase (tabla meta_anuncio).
 // También arma la consulta de los mensajes que salieron por WhatsApp a ese contacto en las últimas 24 h (para saber si escribió alguien del equipo).
