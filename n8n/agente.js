@@ -65,7 +65,7 @@ const mensajesClaude = (historial) => {
     const role = h.rol === 'agente' ? 'assistant' : 'user';
     const ult = mensajes[mensajes.length - 1];
     // Los avisos del error 131060 guardados antes de reconocerlos se muestran igual que los nuevos.
-    const texto = /No se puede mostrar este mensaje en el CRM/i.test(h.texto) ? '[Mensaje ilegible: WhatsApp no deja ver en el CRM lo que escribió la persona]' : h.texto;
+    const texto = /No se puede mostrar este mensaje en el CRM|Unable to display this message in CRM/i.test(h.texto) ? '[Mensaje ilegible: WhatsApp no deja ver en el CRM lo que escribió la persona]' : h.texto;
     if (ult && ult.role === role) ult.content += '\n' + texto; else mensajes.push({ role, content: texto });
   }
   if (!mensajes.length || mensajes[0].role !== 'user') mensajes.unshift({ role: 'user', content: '(inicio de la conversación)' });
@@ -96,7 +96,7 @@ if (!lead) return [];
 const adjunto = m.attachment && m.attachment.type ? `[La persona envió un ${m.attachment.type === 'voice' ? 'audio' : 'archivo (' + m.attachment.type + ')'}]` : '';
 // Con WhatsApp en coexistencia, algunos mensajes (sobre todo el primero que llega desde un anuncio) solo se ven en la app del
 // celular y Kommo manda un aviso del error 131060 en vez del texto: se reemplaza por una marca para que el agente salude.
-const ILEGIBLE = /No se puede mostrar este mensaje en el CRM|error-131060|131060/i;
+const ILEGIBLE = /No se puede mostrar este mensaje en el CRM|Unable to display this message in CRM|error-131060|131060/i;
 const crudo = String(m.text || '').trim();
 const texto = ILEGIBLE.test(crudo) ? '[Mensaje ilegible: WhatsApp no deja ver en el CRM lo que escribió la persona]' : (crudo || adjunto);
 if (!texto) return [];

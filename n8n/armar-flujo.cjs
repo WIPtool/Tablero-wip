@@ -293,7 +293,7 @@ const f12 = {
     codigoTexto('a1f0c0de-0023-4000-8000-000000000023', 'Filas Kommo', [740, 1100], KOMMO['Filas Kommo']),
     // Origen automático: llena el campo Origen vacío con el utm_source del chat o, si el primer mensaje fue ilegible (error 131060), Meta Ads.
     { ...http('a1f0c0de-0034-4000-8000-000000000034', 'Mensajes ilegibles', [740, 1200], {
-      parameters: { url: `${SUPABASE}/rest/v1/agente_mensajes?select=lead_id&rol=eq.cliente&or=${encodeURIComponent('(texto.ilike.*Mensaje ilegible*,texto.ilike.*No se puede mostrar este mensaje*)')}`,
+      parameters: { url: `${SUPABASE}/rest/v1/agente_mensajes?select=lead_id&rol=eq.cliente&or=${encodeURIComponent('(texto.ilike.*Mensaje ilegible*,texto.ilike.*No se puede mostrar este mensaje*,texto.ilike.*Unable to display this message*)')}`,
         authentication: 'genericCredentialType', genericAuthType: 'httpHeaderAuth' }, credentials: CRED.supabase }), executeOnce: true, alwaysOutputData: true },
     codigoTexto('a1f0c0de-0035-4000-8000-000000000035', 'Origen por marcar', [900, 1200], KOMMO['Origen por marcar']),
     http('a1f0c0de-0036-4000-8000-000000000036', 'Marcar origen en Kommo', [1060, 1200], {
