@@ -3,6 +3,7 @@
 //    y pasa a Kommo los leads calientes nuevos de Explee (F4, explee-kommo.js).
 //    Si se define CRED_CALENDLY=<id de la credencial>, también pasa a Kommo las citas nuevas de Calendly (F2, sitio-calendly.js).
 //  - f14-google-ads.json:    recibe lo que envía el script de Google Ads y lo guarda en Supabase.
+//  - f18-brevo-kommo.json:   recibe el webhook de Brevo (añadido a lista y baja) y marca la secuencia de correos en Kommo (brevo-kommo.js).
 //  - f15-formularios-kommo.json: recibe los formularios del sitio (/api/contact) y los crea en Kommo con su Origen (F1).
 //  - f16-agente-whatsapp.json: agente de WhatsApp con Claude (F7); lo llama el webhook de Kommo "mensaje entrante".
 //    Necesita CRED_CLAUDE=<id de la credencial Anthropic "Claude (agente WhatsApp)">; con ella F12 también lleva el agente de seguimiento.
@@ -41,6 +42,11 @@ const LISTA_INFO = 9;            // Brevo · lista "Info solicitada" (automatiza
 const CAMPO_SECUENCIA = 537462;  // Kommo · oportunidad: "Secuencia Brevo" (Info solicitada / Nutrición / Desuscrito)
 const ENUM_INFO = 439040;        // "Info solicitada"
 const CAMPO_RETO = 537464;       // Kommo · oportunidad: "Reto"
+const ENUM_NUTRICION = 439042;   // "Nutrición"
+const ENUM_DESUSCRITO = 439044;  // "Desuscrito"
+const ENUM_OPT_DESUSCRITO = 361370; // Kommo · contacto: "Suscripción de marketing" = Desuscrito
+// Ruta del webhook que llama Brevo (webhook de marketing: añadido a lista y baja) para marcar la secuencia en Kommo (F18).
+const RUTA_BREVO = 'brevo-kommo-e916b8396dcee1b7424b';
 // Ruta del webhook que llama el script de Google Ads (difícil de adivinar; no da acceso a nada, solo recibe cifras).
 const RUTA_GADS = 'gads-7c1e4b9a2f6d48e3a51c';
 
@@ -453,5 +459,38 @@ if (CRED_CLAUDE) {
   };
   fs.writeFileSync(path.join(__dirname, 'f16-agente-whatsapp.json'), JSON.stringify(f16, null, 2));
 }
+// F18 · Brevo → Kommo: secuencia de correos de cada persona (campo Secuencia Brevo de la oportunidad).
+{
+  const BK = partes('brevo-kommo.js');
+  const id = (k) => `e5f0c0de-00${String(k).padStart(2, '0')}-4000-8000-0000000000${String(k).padStart(2, '0')}`;
+  const auth = { authentication: 'genericCredentialType', genericAuthType: 'httpHeaderAuth' };
+  const cuerpo = (expr) => ({ sendBody: true, specifyBody: 'json', jsonBody: `={{ JSON.stringify(${expr}) }}` });
+  const cambios = "$('Armar cambios en Kommo').first().json";
+  const f18 = {
+    name: 'F18 · Brevo → Kommo: secuencia de correos (lo llama el webhook de Brevo)',
+    nodes: [
+      { id: id(1), name: 'Aviso de Brevo', type: 'n8n-nodes-base.webhook', typeVersion: 2, position: [0, 0],
+        webhookId: 'e5f0c0de-0001-4000-8000-0000000c0de9', parameters: { httpMethod: 'POST', path: RUTA_BREVO, responseMode: 'onReceived', options: {} } },
+      codigoTexto(id(2), 'Evento de Brevo', [220, 0], BK['Evento de Brevo']),
+      { ...http(id(3), 'Contacto en Kommo', [440, 0], { parameters: { ...auth }, credentials: CRED.kommo }), alwaysOutputData: true },
+      codigoTexto(id(4), 'Armar cambios en Kommo', [660, 0], BK['Armar cambios en Kommo']
+        .split('__CAMPO_SECUENCIA__').join(String(CAMPO_SECUENCIA)).split('__ENUM_INFO__').join(String(ENUM_INFO))
+        .split('__ENUM_NUTRICION__').join(String(ENUM_NUTRICION)).split('__ENUM_DESUSCRITO__').join(String(ENUM_DESUSCRITO))
+        .split('__ENUM_OPT_DESUSCRITO__').join(String(ENUM_OPT_DESUSCRITO))),
+      http(id(5), 'Secuencia en Kommo', [880, 0], { parameters: { method: 'PATCH', url: 'https://wiptool.kommo.com/api/v4/leads', ...auth,
+        ...cuerpo(`${cambios}.lead`) }, credentials: CRED.kommo }),
+      { ...http(id(6), 'Baja en el contacto', [1100, 0], { parameters: { method: 'PATCH', url: 'https://wiptool.kommo.com/api/v4/contacts', ...auth,
+        ...cuerpo(`${cambios}.contacto`) }, credentials: CRED.kommo }), onError: 'continueRegularOutput' },
+      http(id(7), 'Nota en Kommo', [1320, 0], { parameters: { method: 'POST', url: 'https://wiptool.kommo.com/api/v4/leads/notes', ...auth,
+        ...cuerpo(`${cambios}.nota`) }, credentials: CRED.kommo }),
+    ],
+    connections: { 'Aviso de Brevo': a('Evento de Brevo'), 'Evento de Brevo': a('Contacto en Kommo'), 'Contacto en Kommo': a('Armar cambios en Kommo'),
+      'Armar cambios en Kommo': a('Secuencia en Kommo'), 'Secuencia en Kommo': a('Baja en el contacto'), 'Baja en el contacto': a('Nota en Kommo') },
+    settings: { executionOrder: 'v1', timezone: 'America/Bogota' },
+    pinData: {},
+  };
+  fs.writeFileSync(path.join(__dirname, 'f18-brevo-kommo.json'), JSON.stringify(f18, null, 2));
+}
 fs.writeFileSync(path.join(__dirname, 'f14-google-ads.json'), JSON.stringify(f14, null, 2));
 console.log('ok · webhook de Google Ads: https://wiptool.app.n8n.cloud/webhook/' + RUTA_GADS);
+console.log('ok · webhook de Brevo (F18): https://wiptool.app.n8n.cloud/webhook/' + RUTA_BREVO);
