@@ -73,6 +73,10 @@ export interface Accionador {
   id: number; plataforma: string; tipo: string; accionador: string; enlace: string; que_hace: string; donde_se_ve: string;
   donde_se_usa: string; actualizado_por: string; actualizado: string;
 }
+export interface Propuesta {
+  id: number; cliente: string; documento: string; tipo: string; enlace: string; fecha: string | null; notas: string;
+  actualizado_por: string; actualizado: string;
+}
 
 export interface Embudo {
   kpis: Kpis;

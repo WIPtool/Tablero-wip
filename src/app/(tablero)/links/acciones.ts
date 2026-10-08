@@ -5,7 +5,7 @@ import { clienteServidor } from '@/lib/supabase/servidor';
 import { esDelEquipo } from '@/lib/config';
 import type { Resultado } from '@/app/(tablero)/costos/acciones';
 
-// Acciones de la página de accionadores. Corren con la sesión de la persona (regla "equipo_edita").
+// Acciones de la página "Links de interés" (accionadores y propuestas). Corren con la sesión de la persona (regla "equipo_edita").
 async function quien() {
   const supabase = await clienteServidor();
   const { data } = await supabase.auth.getClaims();
@@ -28,7 +28,7 @@ export async function agregarAccionador(_previo: Resultado | null, datos: FormDa
 
   const { error } = await supabase.from('accionadores').insert(fila);
   if (error) return { ok: false, mensaje: 'No se pudo guardar: ' + error.message };
-  revalidatePath('/accionadores');
+  revalidatePath('/links');
   return { ok: true, mensaje: `${fila.accionador} quedó agregado.` };
 }
 
@@ -38,5 +38,31 @@ export async function eliminarAccionador(datos: FormData) {
   const id = Number(datos.get('id'));
   if (!id) return;
   await supabase.from('accionadores').delete().eq('id', id);
-  revalidatePath('/accionadores');
+  revalidatePath('/links');
+}
+
+export async function agregarPropuesta(_previo: Resultado | null, datos: FormData): Promise<Resultado> {
+  const { supabase, email } = await quien();
+  if (!esDelEquipo(email)) return { ok: false, mensaje: 'Solo cuentas @wiptool.com pueden editar las propuestas.' };
+
+  const fila = {
+    cliente: texto(datos, 'cliente'), documento: texto(datos, 'documento'), tipo: texto(datos, 'tipo') || 'Propuesta comercial',
+    enlace: texto(datos, 'enlace'), fecha: texto(datos, 'fecha') || null, notas: texto(datos, 'notas'), actualizado_por: email,
+  };
+  if (!fila.cliente || !fila.documento) return { ok: false, mensaje: 'Escribe al menos el cliente y el nombre del documento.' };
+  if (!/^https?:\/\//.test(fila.enlace)) return { ok: false, mensaje: 'El enlace debe empezar por https://' };
+
+  const { error } = await supabase.from('propuestas').insert(fila);
+  if (error) return { ok: false, mensaje: 'No se pudo guardar: ' + error.message };
+  revalidatePath('/links');
+  return { ok: true, mensaje: `${fila.documento} (${fila.cliente}) quedó agregado.` };
+}
+
+export async function eliminarPropuesta(datos: FormData) {
+  const { supabase, email } = await quien();
+  if (!esDelEquipo(email)) return;
+  const id = Number(datos.get('id'));
+  if (!id) return;
+  await supabase.from('propuestas').delete().eq('id', id);
+  revalidatePath('/links');
 }

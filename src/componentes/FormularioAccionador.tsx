@@ -1,7 +1,7 @@
 'use client';
 
 import { useActionState, useRef, useEffect } from 'react';
-import { agregarAccionador } from '@/app/(tablero)/accionadores/acciones';
+import { agregarAccionador } from '@/app/(tablero)/links/acciones';
 import type { Resultado } from '@/app/(tablero)/costos/acciones';
 
 const campo = 'rounded-lg border border-linea bg-superficie px-2.5 py-1.5 text-tinta';

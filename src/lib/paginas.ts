@@ -12,7 +12,7 @@ export const PAGINAS: Pagina[] = [
   { id: 'embudo', titulo: 'Embudo', sub: 'Oportunidades de Kommo por etapa y origen, y lo que cuesta cada reunión y cada cliente' },
   { id: 'agente', titulo: 'Agente de WhatsApp', sub: 'Conversaciones que atiende el agente con Claude: respuestas, traspasos a una persona y reuniones' },
   { id: 'costos', titulo: 'Costos fijos', sub: 'Suscripciones que suman a la inversión (Brevo y demás)' },
-  { id: 'accionadores', titulo: 'Accionadores', sub: 'Enlaces medidos, eventos y datos que suman información en Analytics' },
+  { id: 'links', titulo: 'Links de interés', sub: 'Accionadores que suman datos en Analytics y propuestas enviadas a clientes' },
 ];
 
 export const PROXIMAS: Pagina[] = [];
