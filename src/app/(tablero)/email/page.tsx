@@ -34,8 +34,8 @@ export default async function PaginaEmail({ searchParams }: { searchParams: Prom
       <Rejilla>
         <Tarjeta titulo="Correos de las automatizaciones por día" nota="Cada correo cuenta una vez por día, aunque se abra varias veces.">
           <Leyenda items={[{ etiqueta: 'Enviados', color: 'var(--serie-1)' }, { etiqueta: 'Abiertos', color: 'var(--serie-2)' }]} />
-          <GraficaPaneles serie={d.serie} paneles={[
-            { campo: 'enviados', etiqueta: 'Enviados', forma: 'columnas', color: 'var(--serie-1)' },
+          <GraficaPaneles juntos alto={240} serie={d.serie} paneles={[
+            { campo: 'enviados', etiqueta: 'Enviados', forma: 'linea', color: 'var(--serie-1)', area: true },
             { campo: 'aperturas', etiqueta: 'Abiertos', forma: 'linea', color: 'var(--serie-2)' },
           ]} />
         </Tarjeta>
