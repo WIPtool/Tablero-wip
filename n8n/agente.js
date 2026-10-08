@@ -72,8 +72,8 @@ const mensajesClaude = (historial) => {
   return mensajes;
 };
 // Kommo borra los emojis de 4 bytes (👋 📅 🙌…) al guardar el campo que envía el Salesbot: se cambian por equivalentes que sí
-// pasan (✋ ⏰ ✨ ✅ ➡️ ⚡ ☎️) y los demás se quitan, para que no queden espacios dobles.
-const EMOJIS = { '👋': '✋', '🙋': '✋', '📅': '⏰', '🗓️': '⏰', '🗓': '⏰', '📆': '⏰', '🙌': '✨', '😊': '✨', '🙂': '✨', '😃': '✨', '💪': '✨',
+// pasan (✋ ⏰ ✨ ✅ ➡️ ⚡ ☎️ ☺️) y los demás se quitan, para que no queden espacios dobles.
+const EMOJIS = { '👋': '✋', '🙋': '✋', '📅': '⏰', '🗓️': '⏰', '🗓': '⏰', '📆': '⏰', '🙌': '✨', '😊': '☺️', '🙂': '☺️', '😃': '☺️', '💪': '✨',
   '👍': '✅', '👌': '✅', '👉': '➡️', '📍': '➡️', '🚀': '⚡', '🔥': '⚡', '📞': '☎️', '💬': '✨', '📊': '✅', '🚚': '⚡' };
 const limpiarTexto = (t) => Object.entries(EMOJIS).reduce((s, [a, b]) => s.split(a).join(b), String(t || ''))
   .replace(/\*\*?|__|^#+\s*/gm, '').replace(/[\u{10000}-\u{10FFFF}]️?/gu, '').replace(/[ \t]{2,}/g, ' ').replace(/ ([.,!?])/g, '$1')
@@ -154,13 +154,14 @@ const herramienta = {
   input_schema: {
     type: 'object',
     properties: {
-      respuesta: { type: 'string', description: 'El mensaje de WhatsApp: máximo 25 palabras y 2 frases, un solo dato, con 1 emoji de la lista permitida, sin markdown.' },
+      respuesta: { type: 'string', description: 'El mensaje de WhatsApp según el paso del guion: corto (hasta 35 palabras salvo el reto, la explicación de WIP y el cierre), con 1 emoji de la lista permitida, sin markdown; los saltos de línea se permiten.' },
       pasar_a_persona: { type: 'boolean', description: 'true si un asesor debe continuar la conversación.' },
       motivo_traspaso: { type: 'string', description: 'Si pasar_a_persona es true: resumen breve de la conversación y por qué.' },
       datos: {
         type: 'object', description: 'Lo que la persona dijo de su operación (vacío si no lo dijo).',
-        properties: { empresa: { type: 'string' }, pais: { type: 'string' }, tipo_operacion: { type: 'string' },
-          servicios_mes: { type: 'string' }, correo: { type: 'string' }, quiere_reunion: { type: 'boolean' } },
+        properties: { nombre: { type: 'string' }, empresa: { type: 'string' }, pais: { type: 'string' }, tipo_operacion: { type: 'string' },
+          equipo: { type: 'string', description: 'propio, red de terceros o ambos' }, herramienta_actual: { type: 'string' },
+          reto: { type: 'string' }, servicios_mes: { type: 'string' }, correo: { type: 'string' }, quiere_reunion: { type: 'boolean' } },
       },
     },
     required: ['respuesta', 'pasar_a_persona'],
@@ -184,8 +185,9 @@ if (!x.respuesta) throw new Error('Claude no devolvió una respuesta: ' + JSON.s
 const texto = limpiarTexto(x.respuesta);
 const traspaso = x.pasar_a_persona === true;
 const d = x.datos || {};
-const datos = [d.empresa && `Empresa: ${d.empresa}`, d.pais && `País: ${d.pais}`, d.tipo_operacion && `Operación: ${d.tipo_operacion}`,
-  d.servicios_mes && `Servicios al mes: ${d.servicios_mes}`, d.correo && `Correo: ${d.correo}`].filter(Boolean).join('\n');
+const datos = [d.nombre && `Nombre: ${d.nombre}`, d.empresa && `Empresa: ${d.empresa}`, d.pais && `País: ${d.pais}`,
+  d.tipo_operacion && `Operación: ${d.tipo_operacion}`, d.equipo && `Equipo: ${d.equipo}`, d.herramienta_actual && `Herramienta actual: ${d.herramienta_actual}`,
+  d.reto && `Reto: ${d.reto}`, d.servicios_mes && `Servicios al mes: ${d.servicios_mes}`, d.correo && `Correo: ${d.correo}`].filter(Boolean).join('\n');
 return [{ json: {
   lead_id: ctx.lead_id, texto, traspaso, responsable: ctx.responsable,
   kommo: [{ id: ctx.lead_id, custom_fields_values: [{ field_id: CAMPO_RESPUESTA, values: [{ value: texto }] }],
@@ -249,8 +251,8 @@ ${ctx.texto}
 # Tarea: mensaje de seguimiento
 La persona dejó de responder. Escribe UN mensaje corto de seguimiento (máximo 20 palabras) que retome la conversación con naturalidad:
 - NO repitas la pregunta de tu último mensaje: si no la respondió, cambia de ángulo. No vuelvas a saludar como si fuera la primera vez, no reclames que no ha respondido ni presiones.
-- Aporta algo nuevo y útil según lo que preguntó: si preguntó por precios o el demo, ofrécele ver WIP en una reunión corta con el enlace de agenda (ahí se cotiza su caso); si preguntó qué hace WIP o si se puede personalizar, un enlace al sitio que le sirva o la reunión.
-- Si ofreces la reunión, pon el enlace de agenda en ese mismo mensaje; no preguntes "¿te paso el enlace?".
+- Aporta algo nuevo y útil según el punto del guion donde quedó: si no ha dado su correo ni agendado, pregúntale si quiere agendar la demo virtual (unos 45 minutos) o que le envíes la información detallada a su correo; si preguntó qué hace WIP o si se puede personalizar, un enlace al sitio que le sirva.
+- Pon el enlace de agenda solo si la persona ya dijo que quiere la demo.
 - Termina con una pregunta de sí o no, fácil de responder.
 - 1 emoji de la lista permitida.
 No escribas (enviar = false) si la persona cerró la conversación: dijo que no le interesa, que no la contacten, que ya agendó, que lo revisará y avisará, o se despidió.
