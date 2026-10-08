@@ -34,9 +34,9 @@ export default async function PaginaResumen({ searchParams }: { searchParams: Pr
       <Rejilla>
         <Tarjeta titulo="Visitas y conversiones por día">
           <Leyenda items={[{ etiqueta: 'Visitas', color: 'var(--serie-1)' }, { etiqueta: 'Conversiones', color: 'var(--serie-2)' }]} />
-          <GraficaPaneles serie={d.serie} paneles={[
-            { campo: 'visitas', etiqueta: 'Visitas', forma: 'linea', color: 'var(--serie-1)' },
-            { campo: 'conversiones', etiqueta: 'Conversiones', forma: 'columnas', color: 'var(--serie-2)' },
+          <GraficaPaneles juntos alto={240} serie={d.serie} paneles={[
+            { campo: 'visitas', etiqueta: 'Visitas', forma: 'linea', color: 'var(--serie-1)', area: true },
+            { campo: 'conversiones', etiqueta: 'Conversiones', forma: 'linea', color: 'var(--serie-2)' },
           ]} />
         </Tarjeta>
         <Tarjeta titulo="De dónde llegan las visitas" col={7}
