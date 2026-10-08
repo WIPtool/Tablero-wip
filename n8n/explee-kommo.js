@@ -1,5 +1,6 @@
 // n8n · F12 · F4 Explee → Kommo. armar-flujo.cjs toma cada parte por su marca "// ==".
-// Cada hora, después de leer Explee: los leads calientes que aún no pasaron a Kommo se crean como oportunidad en "Nuevo"
+// Cada hora, después de leer Explee: los leads calientes que aún no pasaron a Kommo se crean como oportunidad en el embudo
+// "Prospección (Explee)", etapa "Respondió en Explee"
 // (Origen = Explee, Campaña = la de Explee, con contacto, empresa y una nota con lo que respondió la persona).
 // Si la persona ya está en Kommo (mismo correo o teléfono) no se duplica: solo se le deja la nota en su última oportunidad.
 // La tabla explee_kommo de Supabase guarda qué leads de Explee ya pasaron; la vista explee_pendientes_kommo da los que faltan.
@@ -19,7 +20,7 @@ return nuevos.map((f) => ({ json: { ...f,
 // == Armar oportunidades (Code, una vez para todos los elementos)
 // Con lo que encontró Kommo por correo y por teléfono decide: crear la oportunidad o solo dejar la nota.
 const BASE = 'https://wiptool.kommo.com/api/v4';
-const EMBUDO = 14551307, ETAPA_NUEVO = 112413251, CAMPO_ORIGEN = 421634, ORIGEN_EXPLEE = 340200, CAMPO_CAMPANA = 421636;
+const EMBUDO = 14590803, ETAPA_NUEVO = 112730835, CAMPO_ORIGEN = 421634, ORIGEN_EXPLEE = 340200, CAMPO_CAMPANA = 421636;
 const nuevos = $('Nuevos para Kommo').all();
 const porCorreo = $('Buscar correo en Kommo').all();
 const porTelefono = $input.all();
