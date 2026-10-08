@@ -2,6 +2,7 @@
 //  - f12-carga-tablero.json: cada hora carga Google (Analytics y Search Console), Meta Ads, la TRM, Brevo, Explee y Kommo a Supabase,
 //    y pasa a Kommo los leads calientes nuevos de Explee (F4, explee-kommo.js).
 //    Si se define CRED_CALENDLY=<id de la credencial>, también pasa a Kommo las citas nuevas de Calendly (F2, sitio-calendly.js).
+//    También pasa a "Sin respuesta (retomar)" a quien dejó de responder en "En conversación" (sin-respuesta.js).
 //  - f14-google-ads.json:    recibe lo que envía el script de Google Ads y lo guarda en Supabase.
 //  - f18-brevo-kommo.json:   recibe el webhook de Brevo (añadido a lista y baja) y marca la secuencia de correos en Kommo (brevo-kommo.js).
 //  - f15-formularios-kommo.json: recibe los formularios del sitio (/api/contact) y los crea en Kommo con su Origen (F1).
@@ -252,7 +253,29 @@ const RECORDATORIO = (() => {
   conexiones['Usuario Calendly'] = varios('Pedidos Calendly', 'Pedidos recordatorio');
   return { nodos, conexiones };
 })();
-const ARRANQUE = [...INICIOS.slice(0, -1), 'Trabajos anuncios Meta', ...F2.inicio, INICIOS[INICIOS.length - 1], ...SEGUIMIENTO.inicio];
+// Sin respuesta: cada hora pasa a "Sin respuesta (retomar)" a quien dejó de responder en "En conversación" (sin-respuesta.js).
+const SINRESP = (() => {
+  const SR = partes('sin-respuesta.js');
+  const id = (k) => `a1f0c0de-06${String(k).padStart(2, '0')}-4000-8000-0000000006${String(k).padStart(2, '0')}`;
+  const auth = { authentication: 'genericCredentialType', genericAuthType: 'httpHeaderAuth' };
+  const cuerpo = (expr) => ({ sendBody: true, specifyBody: 'json', jsonBody: `={{ JSON.stringify(${expr}) }}` });
+  const y = 2300;
+  const nodos = [
+    codigoTexto(id(1), 'Trabajos sin respuesta', [260, y], SR['Trabajos sin respuesta']),
+    { ...http(id(2), 'Leads en conversación', [420, y], { parameters: auth, credentials: CRED.kommo }), alwaysOutputData: true },
+    codigoTexto(id(3), 'Pedidos mensajes sin respuesta', [580, y], SR['Pedidos mensajes sin respuesta']),
+    { ...http(id(4), 'Mensajes (sin respuesta)', [740, y], { parameters: auth, credentials: CRED.kommo }), alwaysOutputData: true, onError: 'continueRegularOutput' },
+    codigoTexto(id(5), 'Armar sin respuesta', [900, y], SR['Armar sin respuesta']),
+    http(id(6), 'Pasar a Sin respuesta', [1060, y], { parameters: { method: 'PATCH', url: 'https://wiptool.kommo.com/api/v4/leads', ...auth,
+      ...cuerpo("$('Armar sin respuesta').first().json.mover") }, credentials: CRED.kommo }),
+    http(id(7), 'Nota sin respuesta', [1220, y], { parameters: { method: 'POST', url: 'https://wiptool.kommo.com/api/v4/leads/notes', ...auth,
+      ...cuerpo("$('Armar sin respuesta').first().json.notas") }, credentials: CRED.kommo }),
+  ];
+  const nombres = nodos.map((x) => x.name);
+  const conexiones = Object.fromEntries(nombres.slice(0, -1).map((nm, i) => [nm, a(nombres[i + 1])]));
+  return { nodos, conexiones, inicio: ['Trabajos sin respuesta'] };
+})();
+const ARRANQUE = [...INICIOS.slice(0, -1), 'Trabajos anuncios Meta', ...F2.inicio, INICIOS[INICIOS.length - 1], ...SEGUIMIENTO.inicio, ...SINRESP.inicio];
 const f12 = {
   name: 'F12 · Carga del tablero (Google, Meta y TRM → Supabase)',
   nodes: [
@@ -341,6 +364,7 @@ const f12 = {
     ...ANUNCIOS_META.nodos,
     ...SEGUIMIENTO.nodos,
     ...RECORDATORIO.nodos,
+    ...SINRESP.nodos,
   ],
   connections: {
     'Cada hora': varios(...ARRANQUE),
@@ -349,6 +373,7 @@ const f12 = {
     ...ANUNCIOS_META.conexiones,
     ...SEGUIMIENTO.conexiones,
     ...RECORDATORIO.conexiones,
+    ...SINRESP.conexiones,
     'Trabajos Google': a('Consultar Google'), 'Consultar Google': a('Filas Google'), 'Filas Google': a('Guardar en Supabase'),
     'Trabajos Meta': a('Consultar Meta'), 'Consultar Meta': a('Filas Meta'), 'Filas Meta': a('Guardar en Supabase'),
     'Trabajos TRM': a('Consultar TRM'), 'Consultar TRM': a('Filas TRM'), 'Filas TRM': a('Guardar en Supabase'),

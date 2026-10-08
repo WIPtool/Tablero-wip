@@ -1913,6 +1913,174 @@
           "name": "Kommo (lectura)"
         }
       }
+    },
+    {
+      "id": "a1f0c0de-0601-4000-8000-000000000601",
+      "name": "Trabajos sin respuesta",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        260,
+        2300
+      ],
+      "parameters": {
+        "jsCode": "// De 8 a. m. a 8 p. m. (hora Colombia), una vez por hora.\nconst EMBUDO = 14551307, EN_CONVERSACION = 112413251;\nconst hora = Number(new Intl.DateTimeFormat('en-US', { timeZone: 'America/Bogota', hour: 'numeric', hourCycle: 'h23' }).format(new Date()));\nif (hora < 8 || hora >= 20) return [];\nreturn [{ json: { url: `https://wiptool.kommo.com/api/v4/leads?limit=250&with=contacts&filter[statuses][0][pipeline_id]=${EMBUDO}&filter[statuses][0][status_id]=${EN_CONVERSACION}` } }];\n"
+      }
+    },
+    {
+      "id": "a1f0c0de-0602-4000-8000-000000000602",
+      "name": "Leads en conversación",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        420,
+        2300
+      ],
+      "parameters": {
+        "method": "GET",
+        "url": "={{ $json.url }}",
+        "options": {
+          "batching": {
+            "batch": {
+              "batchSize": 1,
+              "batchInterval": 300
+            }
+          }
+        },
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth"
+      },
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "wxfP9VZK9UBkShIS",
+          "name": "Kommo (lectura)"
+        }
+      },
+      "alwaysOutputData": true
+    },
+    {
+      "id": "a1f0c0de-0603-4000-8000-000000000603",
+      "name": "Pedidos mensajes sin respuesta",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        580,
+        2300
+      ],
+      "parameters": {
+        "jsCode": "// Los mensajes de WhatsApp de esos contactos en los últimos 10 días (Kommo filtra los eventos de chat por contacto).\nconst r = $input.first().json;\nconst datos = typeof r.data === 'string' ? (() => { try { return JSON.parse(r.data); } catch (e) { return {}; } })() : r;\nconst leads = (datos._embedded && datos._embedded.leads) || [];\nconst contactos = [...new Set(leads.map((l) => ((l._embedded && l._embedded.contacts) || [])[0]).filter(Boolean).map((c) => c.id))];\nif (!leads.length) return [];\n// Kommo rechaza (400) la consulta con muchos contactos a la vez: se piden de a 10, hasta 3 páginas por grupo y tipo.\nconst desde = Math.floor(Date.now() / 1000) - 10 * 86400;\nconst pedidos = [];\nfor (let i = 0; i < contactos.length; i += 10) {\n  const filtro = contactos.slice(i, i + 10).map((id) => `filter[entity_id][]=${id}`).join('&');\n  for (const tipo of ['incoming_chat_message', 'outgoing_chat_message']) {\n    for (let p = 1; p <= 3; p++) {\n      pedidos.push({ json: { url: `https://wiptool.kommo.com/api/v4/events?limit=100&page=${p}&filter[entity]=contact&${filtro}&filter[type][]=${tipo}&filter[created_at][from]=${desde}` } });\n    }\n  }\n}\nreturn pedidos;\n"
+      }
+    },
+    {
+      "id": "a1f0c0de-0604-4000-8000-000000000604",
+      "name": "Mensajes (sin respuesta)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        740,
+        2300
+      ],
+      "parameters": {
+        "method": "GET",
+        "url": "={{ $json.url }}",
+        "options": {
+          "batching": {
+            "batch": {
+              "batchSize": 1,
+              "batchInterval": 300
+            }
+          }
+        },
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth"
+      },
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "wxfP9VZK9UBkShIS",
+          "name": "Kommo (lectura)"
+        }
+      },
+      "alwaysOutputData": true,
+      "onError": "continueRegularOutput"
+    },
+    {
+      "id": "a1f0c0de-0605-4000-8000-000000000605",
+      "name": "Armar sin respuesta",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        900,
+        2300
+      ],
+      "parameters": {
+        "jsCode": "const EMBUDO = 14551307, SIN_RESPUESTA = 112730823, DIA = 86400;\nconst leer = (j) => { if (j && typeof j.data === 'string') { try { return JSON.parse(j.data); } catch (e) { return {}; } } return j || {}; };\nconst leads = (leer($('Leads en conversación').first().json)._embedded || {}).leads || [];\nconst eventos = $input.all().map((i) => leer(i.json)).flatMap((d) => (d._embedded && d._embedded.events) || []);\n// Si Kommo no devolvió ningún mensaje (falló la consulta), no se mueve nada: sin mensajes todo parecería callado.\nif (!eventos.length) return [];\nconst ahora = Math.floor(Date.now() / 1000);\nconst mover = [];\nconst notas = [];\nfor (const l of leads) {\n  const contacto = ((l._embedded && l._embedded.contacts) || [])[0];\n  // Se piden por contacto, pero Kommo los devuelve con la oportunidad (entity_type \"lead\") o con el contacto.\n  const suyos = eventos.filter((e) => (e.entity_type === 'lead' && Number(e.entity_id) === Number(l.id))\n    || (contacto && e.entity_type === 'contact' && Number(e.entity_id) === Number(contacto.id)));\n  const entrantes = suyos.filter((e) => e.type === 'incoming_chat_message').map((e) => e.created_at);\n  const salientes = suyos.filter((e) => e.type === 'outgoing_chat_message').map((e) => e.created_at);\n  const ultEntrada = entrantes.length ? Math.max(...entrantes) : l.created_at;\n  const ultSalida = salientes.length ? Math.max(...salientes) : 0;\n  const callado = ahora - ultEntrada >= 3 * DIA;\n  const sinNadaReciente = ahora - ultSalida >= DIA;\n  const ultimoIntento = ultSalida - ultEntrada >= DIA || ahora - ultEntrada >= 5 * DIA;\n  if (!(callado && sinNadaReciente && ultimoIntento)) continue;\n  const dias = Math.floor((ahora - ultEntrada) / DIA);\n  mover.push({ id: l.id, pipeline_id: EMBUDO, status_id: SIN_RESPUESTA });\n  notas.push({ entity_id: l.id, note_type: 'common', params: { text: `Pasó a \"Sin respuesta (retomar)\": no responde hace ${dias} días. Si vuelve a escribir, regresa sola a \"En conversación\".` } });\n}\nif (!mover.length) return [];\nreturn [{ json: { mover, notas } }];\n"
+      }
+    },
+    {
+      "id": "a1f0c0de-0606-4000-8000-000000000606",
+      "name": "Pasar a Sin respuesta",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1060,
+        2300
+      ],
+      "parameters": {
+        "method": "PATCH",
+        "url": "https://wiptool.kommo.com/api/v4/leads",
+        "options": {
+          "batching": {
+            "batch": {
+              "batchSize": 1,
+              "batchInterval": 300
+            }
+          }
+        },
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify($('Armar sin respuesta').first().json.mover) }}"
+      },
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "wxfP9VZK9UBkShIS",
+          "name": "Kommo (lectura)"
+        }
+      }
+    },
+    {
+      "id": "a1f0c0de-0607-4000-8000-000000000607",
+      "name": "Nota sin respuesta",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1220,
+        2300
+      ],
+      "parameters": {
+        "method": "POST",
+        "url": "https://wiptool.kommo.com/api/v4/leads/notes",
+        "options": {
+          "batching": {
+            "batch": {
+              "batchSize": 1,
+              "batchInterval": 300
+            }
+          }
+        },
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify($('Armar sin respuesta').first().json.notas) }}"
+      },
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "wxfP9VZK9UBkShIS",
+          "name": "Kommo (lectura)"
+        }
+      }
     }
   ],
   "connections": {
@@ -1966,6 +2134,11 @@
           },
           {
             "node": "Trabajos plantilla",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Trabajos sin respuesta",
             "type": "main",
             "index": 0
           }
@@ -2022,6 +2195,11 @@
           },
           {
             "node": "Trabajos plantilla",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Trabajos sin respuesta",
             "type": "main",
             "index": 0
           }
@@ -2489,6 +2667,72 @@
         [
           {
             "node": "Enviar recordatorio por WhatsApp",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Trabajos sin respuesta": {
+      "main": [
+        [
+          {
+            "node": "Leads en conversación",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Leads en conversación": {
+      "main": [
+        [
+          {
+            "node": "Pedidos mensajes sin respuesta",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Pedidos mensajes sin respuesta": {
+      "main": [
+        [
+          {
+            "node": "Mensajes (sin respuesta)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Mensajes (sin respuesta)": {
+      "main": [
+        [
+          {
+            "node": "Armar sin respuesta",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Armar sin respuesta": {
+      "main": [
+        [
+          {
+            "node": "Pasar a Sin respuesta",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Pasar a Sin respuesta": {
+      "main": [
+        [
+          {
+            "node": "Nota sin respuesta",
             "type": "main",
             "index": 0
           }
