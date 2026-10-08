@@ -94,3 +94,30 @@ const salida = [
 ];
 if (rango) salida.push({ json: { p_tabla: 'kommo_cambio_etapa', p_desde: rango.desde, p_hasta: rango.hasta, p_filas: filasEventos, p_fuente: 'kommo', p_sitio: null } });
 return salida;
+
+// == Origen por marcar (Code, una vez para todos los elementos)
+// Llena el campo Origen de Kommo cuando está vacío: el Salesbot "Origen por mensaje de WhatsApp" falla en la mayoría de
+// los chats (desde el 2026-10-06 marcó 6 de 50). Reglas, en orden:
+//  1. utm_source del chat (los anuncios de Meta llevan utm_source=meta_ads; los botones del sitio, instagram, facebook…).
+//  2. Sin UTM, si el agente recibió un mensaje que Kommo no puede mostrar (error 131060): es el primer mensaje de un
+//     anuncio de clic a WhatsApp en la coexistencia, así que se marca Meta Ads.
+// Sale de "Consultar Kommo" (las mismas páginas de oportunidades) y de "Mensajes ilegibles" (Supabase).
+const CAMPO_ORIGEN = 421634;
+const ENUM = { instagram: 340194, ig: 340194, facebook: 340196, fb: 340196, meta_ads: 340198, meta: 340198, explee: 340200,
+  email: 340202, brevo: 340202, sendinblue: 340202, sitio_web: 340204, google: 340206, google_ads: 340206, linkedin: 340208 };
+const cuerpo = (j) => { if (j && typeof j.data === 'string') { try { return JSON.parse(j.data); } catch (e) { return {}; } } return j || {}; };
+const leads = new Map();
+for (const r of $('Consultar Kommo').all()) for (const l of (cuerpo(r.json)._embedded || {}).leads || []) leads.set(l.id, l);
+const ilegibles = new Set($input.all().map((i) => Number(i.json.lead_id)).filter(Boolean));
+const valor = (l, prueba) => { const f = (l.custom_fields_values || []).find(prueba); return f && f.values && f.values[0] ? String(f.values[0].value ?? '') : ''; };
+const cambios = [];
+for (const l of leads.values()) {
+  if (valor(l, (f) => f.field_id === CAMPO_ORIGEN)) continue;
+  const utm = valor(l, (f) => f.field_code === 'UTM_SOURCE').trim().toLowerCase();
+  const enumId = ENUM[utm] || (!utm && ilegibles.has(l.id) ? ENUM.meta_ads : null);
+  if (enumId) cambios.push({ id: l.id, custom_fields_values: [{ field_id: CAMPO_ORIGEN, values: [{ enum_id: enumId }] }] });
+}
+// Kommo acepta hasta 250 oportunidades por PATCH.
+const lotes = [];
+for (let i = 0; i < cambios.length; i += 250) lotes.push({ json: { cuerpo: cambios.slice(i, i + 250), cantidad: Math.min(250, cambios.length - i) } });
+return lotes;

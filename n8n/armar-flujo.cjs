@@ -291,6 +291,14 @@ const f12 = {
       parameters: { authentication: 'genericCredentialType', genericAuthType: 'httpHeaderAuth' },
       credentials: CRED.kommo }),
     codigoTexto('a1f0c0de-0023-4000-8000-000000000023', 'Filas Kommo', [740, 1100], KOMMO['Filas Kommo']),
+    // Origen automático: llena el campo Origen vacío con el utm_source del chat o, si el primer mensaje fue ilegible (error 131060), Meta Ads.
+    { ...http('a1f0c0de-0034-4000-8000-000000000034', 'Mensajes ilegibles', [740, 1200], {
+      parameters: { url: `${SUPABASE}/rest/v1/agente_mensajes?select=lead_id&rol=eq.cliente&or=${encodeURIComponent('(texto.ilike.*Mensaje ilegible*,texto.ilike.*No se puede mostrar este mensaje*)')}`,
+        authentication: 'genericCredentialType', genericAuthType: 'httpHeaderAuth' }, credentials: CRED.supabase }), executeOnce: true, alwaysOutputData: true },
+    codigoTexto('a1f0c0de-0035-4000-8000-000000000035', 'Origen por marcar', [900, 1200], KOMMO['Origen por marcar']),
+    http('a1f0c0de-0036-4000-8000-000000000036', 'Marcar origen en Kommo', [1060, 1200], {
+      parameters: { method: 'PATCH', url: 'https://wiptool.kommo.com/api/v4/leads', authentication: 'genericCredentialType', genericAuthType: 'httpHeaderAuth',
+        sendBody: true, specifyBody: 'json', jsonBody: '={{ JSON.stringify($json.cuerpo) }}' }, credentials: CRED.kommo }),
 
     // F4 · Explee → Kommo (sale de "Filas Explee")
     { ...http('a1f0c0de-0024-4000-8000-000000000024', 'Pendientes para Kommo', [1060, 1000], {
@@ -342,7 +350,8 @@ const f12 = {
     'Pendientes para Kommo': a('Nuevos para Kommo'), 'Nuevos para Kommo': a('Buscar correo en Kommo'), 'Buscar correo en Kommo': a('Buscar teléfono en Kommo'),
     'Buscar teléfono en Kommo': a('Armar oportunidades'), 'Armar oportunidades': a('Crear en Kommo'), 'Crear en Kommo': a('Nota de cada uno'),
     'Nota de cada uno': a('Nota en Kommo'), 'Nota en Kommo': a('Registro Explee-Kommo'), 'Registro Explee-Kommo': a('Registrar en Supabase'),
-    'Trabajos Kommo': a('Consultar Kommo'), 'Consultar Kommo': a('Filas Kommo'), 'Filas Kommo': a('Guardar en Supabase'),
+    'Trabajos Kommo': a('Consultar Kommo'), 'Consultar Kommo': varios('Filas Kommo', 'Mensajes ilegibles'), 'Filas Kommo': a('Guardar en Supabase'),
+    'Mensajes ilegibles': a('Origen por marcar'), 'Origen por marcar': a('Marcar origen en Kommo'),
   },
   settings: { executionOrder: 'v1', timezone: 'America/Bogota', saveDataSuccessExecution: 'none' },
   pinData: {},

@@ -410,6 +410,84 @@
       }
     },
     {
+      "id": "a1f0c0de-0034-4000-8000-000000000034",
+      "name": "Mensajes ilegibles",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        740,
+        1200
+      ],
+      "parameters": {
+        "method": "GET",
+        "url": "https://tlpnkcroqenudzgiqzum.supabase.co/rest/v1/agente_mensajes?select=lead_id&rol=eq.cliente&or=(texto.ilike.*Mensaje%20ilegible*%2Ctexto.ilike.*No%20se%20puede%20mostrar%20este%20mensaje*)",
+        "options": {
+          "batching": {
+            "batch": {
+              "batchSize": 1,
+              "batchInterval": 300
+            }
+          }
+        },
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth"
+      },
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "us3OmK2VUvuuu7t8",
+          "name": "Supabase (tablero)"
+        }
+      },
+      "executeOnce": true,
+      "alwaysOutputData": true
+    },
+    {
+      "id": "a1f0c0de-0035-4000-8000-000000000035",
+      "name": "Origen por marcar",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        900,
+        1200
+      ],
+      "parameters": {
+        "jsCode": "// Llena el campo Origen de Kommo cuando está vacío: el Salesbot \"Origen por mensaje de WhatsApp\" falla en la mayoría de\n// los chats (desde el 2026-10-06 marcó 6 de 50). Reglas, en orden:\n//  1. utm_source del chat (los anuncios de Meta llevan utm_source=meta_ads; los botones del sitio, instagram, facebook…).\n//  2. Sin UTM, si el agente recibió un mensaje que Kommo no puede mostrar (error 131060): es el primer mensaje de un\n//     anuncio de clic a WhatsApp en la coexistencia, así que se marca Meta Ads.\n// Sale de \"Consultar Kommo\" (las mismas páginas de oportunidades) y de \"Mensajes ilegibles\" (Supabase).\nconst CAMPO_ORIGEN = 421634;\nconst ENUM = { instagram: 340194, ig: 340194, facebook: 340196, fb: 340196, meta_ads: 340198, meta: 340198, explee: 340200,\n  email: 340202, brevo: 340202, sendinblue: 340202, sitio_web: 340204, google: 340206, google_ads: 340206, linkedin: 340208 };\nconst cuerpo = (j) => { if (j && typeof j.data === 'string') { try { return JSON.parse(j.data); } catch (e) { return {}; } } return j || {}; };\nconst leads = new Map();\nfor (const r of $('Consultar Kommo').all()) for (const l of (cuerpo(r.json)._embedded || {}).leads || []) leads.set(l.id, l);\nconst ilegibles = new Set($input.all().map((i) => Number(i.json.lead_id)).filter(Boolean));\nconst valor = (l, prueba) => { const f = (l.custom_fields_values || []).find(prueba); return f && f.values && f.values[0] ? String(f.values[0].value ?? '') : ''; };\nconst cambios = [];\nfor (const l of leads.values()) {\n  if (valor(l, (f) => f.field_id === CAMPO_ORIGEN)) continue;\n  const utm = valor(l, (f) => f.field_code === 'UTM_SOURCE').trim().toLowerCase();\n  const enumId = ENUM[utm] || (!utm && ilegibles.has(l.id) ? ENUM.meta_ads : null);\n  if (enumId) cambios.push({ id: l.id, custom_fields_values: [{ field_id: CAMPO_ORIGEN, values: [{ enum_id: enumId }] }] });\n}\n// Kommo acepta hasta 250 oportunidades por PATCH.\nconst lotes = [];\nfor (let i = 0; i < cambios.length; i += 250) lotes.push({ json: { cuerpo: cambios.slice(i, i + 250), cantidad: Math.min(250, cambios.length - i) } });\nreturn lotes;\n"
+      }
+    },
+    {
+      "id": "a1f0c0de-0036-4000-8000-000000000036",
+      "name": "Marcar origen en Kommo",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1060,
+        1200
+      ],
+      "parameters": {
+        "method": "PATCH",
+        "url": "https://wiptool.kommo.com/api/v4/leads",
+        "options": {
+          "batching": {
+            "batch": {
+              "batchSize": 1,
+              "batchInterval": 300
+            }
+          }
+        },
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify($json.cuerpo) }}"
+      },
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "wxfP9VZK9UBkShIS",
+          "name": "Kommo (lectura)"
+        }
+      }
+    },
+    {
       "id": "a1f0c0de-0024-4000-8000-000000000024",
       "name": "Pendientes para Kommo",
       "type": "n8n-nodes-base.httpRequest",
@@ -2726,6 +2804,11 @@
             "node": "Filas Kommo",
             "type": "main",
             "index": 0
+          },
+          {
+            "node": "Mensajes ilegibles",
+            "type": "main",
+            "index": 0
           }
         ]
       ]
@@ -2735,6 +2818,28 @@
         [
           {
             "node": "Guardar en Supabase",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Mensajes ilegibles": {
+      "main": [
+        [
+          {
+            "node": "Origen por marcar",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Origen por marcar": {
+      "main": [
+        [
+          {
+            "node": "Marcar origen en Kommo",
             "type": "main",
             "index": 0
           }
