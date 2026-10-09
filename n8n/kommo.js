@@ -8,7 +8,7 @@ const manual = !$input.first().json.timestamp;
 const sumar = (f, n) => { const d = new Date(f + 'T00:00:00Z'); d.setUTCDate(d.getUTCDate() + n); return d.toISOString().slice(0, 10); };
 const desde = sumar(hoy, manual ? -364 : -2);
 const unix = Math.floor(new Date(desde + 'T00:00:00-05:00').getTime() / 1000); // medianoche de Bogotá
-const PAG_LEADS = 4, PAG_EVENTOS = manual ? 20 : 3; // 250 oportunidades y 100 cambios por página
+const PAG_LEADS = 4, PAG_EVENTOS = manual ? 20 : 10; // 250 oportunidades y 100 cambios por página (10: los movimientos masivos del ciclo de vida)
 // Los chats sin aceptar (etapa "Leads entrantes") no salen en /leads: hay que pedirlos por la etapa.
 const EMBUDO = 14551307, ETAPA_ENTRANTES = 112413247;
 
