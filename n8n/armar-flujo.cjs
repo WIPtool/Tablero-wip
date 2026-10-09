@@ -307,7 +307,7 @@ const CICLO = (() => {
     { ...http(id(12), 'Registrar retomes (ciclo)', [2020, y], { parameters: { method: 'POST', url: `${SUPABASE}/rest/v1/agente_mensajes`, ...auth,
       sendHeaders: true, headerParameters: { parameters: [{ name: 'Prefer', value: 'return=minimal' }] }, ...cuerpo(`${ciclo}.filas`) },
       credentials: CRED.supabase }), ...sigue },
-    codigoTexto(id(13), 'Contactos Brevo (ciclo)', [2180, y], CV['Contactos Brevo (ciclo)']),
+    codigoTexto(id(13), 'Contactos Brevo (ciclo)', [2180, y], CV['Contactos Brevo']),
     { ...http(id(14), 'Nutrición Brevo (ciclo)', [2340, y], { parameters: { method: 'POST', url: 'https://api.brevo.com/v3/contacts', ...auth,
       ...cuerpo('$json') }, credentials: CRED.brevo }), onError: 'continueRegularOutput' },
   ];
@@ -323,23 +323,21 @@ const CALIFICADOR = (() => {
   const auth = { authentication: 'genericCredentialType', genericAuthType: 'httpHeaderAuth' };
   const cuerpo = (expr) => ({ sendBody: true, specifyBody: 'json', jsonBody: `={{ JSON.stringify(${expr}) }}` });
   const preparar = (js) => js.split('__SUPABASE__').join(SUPABASE);
-  const porElemento = (k, name, x, js) => ({ id: id(k), name, type: 'n8n-nodes-base.code', typeVersion: 2, position: [x, 2700],
-    parameters: { mode: 'runOnceForEachItem', jsCode: js } });
   const y = 2700;
   const nodos = [
     codigoTexto(id(1), 'Trabajos calificador', [260, y], preparar(CA['Trabajos calificador'])),
     http(id(2), 'Mensajes recientes (calificador)', [420, y], { parameters: auth, credentials: CRED.supabase }),
     codigoTexto(id(3), 'Pedidos calificador', [580, y], CA['Pedidos calificador']),
     { ...http(id(4), 'Leads a calificar', [740, y], { parameters: auth, credentials: CRED.kommo }), alwaysOutputData: true, onError: 'continueRegularOutput' },
-    codigoTexto(id(5), 'Elegir a calificar', [900, y], preparar(CA['Elegir a calificar'])),
+    { ...codigoTexto(id(5), 'Elegir a calificar', [900, y], preparar(CA['Elegir a calificar'])), onError: 'continueRegularOutput' },
     http(id(6), 'Historial (calificador)', [1060, y], { parameters: { ...auth, options: { ...lotes, response: { response: { responseFormat: 'text' } } } },
       credentials: CRED.supabase }),
-    porElemento(7, 'Pedido a Claude (calificador)', 1220, CA['Pedido a Claude (calificador)']),
+    { ...codigoTexto(id(7), 'Pedido a Claude (calificador)', [1220, y], CA['Pedido a Claude']), onError: 'continueRegularOutput' },
     { ...http(id(8), 'Claude (calificador)', [1380, y], { parameters: { method: 'POST', url: 'https://api.anthropic.com/v1/messages',
       authentication: 'predefinedCredentialType', nodeCredentialType: 'anthropicApi',
       sendHeaders: true, headerParameters: { parameters: [{ name: 'anthropic-version', value: '2023-06-01' }] }, ...cuerpo('$json.pedido') },
       credentials: CRED_CLAUDE }), onError: 'continueRegularOutput' },
-    porElemento(9, 'Calificación en Kommo', 1540, CA['Calificación en Kommo']),
+    { ...codigoTexto(id(9), 'Calificación en Kommo', [1540, y], CA['Calificación en Kommo']), onError: 'continueRegularOutput' },
     { ...http(id(10), 'Guardar calificación', [1700, y], { parameters: { method: 'PATCH', url: 'https://wiptool.kommo.com/api/v4/leads', ...auth,
       ...cuerpo('$json.cuerpo') }, credentials: CRED.kommo }), onError: 'continueRegularOutput' },
   ];

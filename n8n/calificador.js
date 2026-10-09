@@ -26,11 +26,14 @@ const leads = ((datos._embedded && datos._embedded.leads) || []).filter((l) => l
 return leads.map((l) => ({ json: { lead_id: l.id, nombre: l.name,
   url: `${SUPABASE}/rest/v1/agente_mensajes?select=rol,texto,momento,tipo&lead_id=eq.${l.id}&tipo=neq.sin_seguimiento&order=momento.asc&limit=60` } }));
 
-// == Pedido a Claude (calificador) (Code, una vez por cada elemento)
+// == Pedido a Claude (calificador) (Code, una vez para todos los elementos)
+// Empareja cada historial con su lead por posición (Historial devuelve un elemento por cada lead elegido, en el mismo orden).
 const MODELO = 'claude-sonnet-5-5';
-const yo = $('Elegir a calificar').item.json;
-const r = $json;
-const filas = Array.isArray(r) ? r : (Array.isArray(r.data) ? r.data : (typeof r.data === 'string' ? JSON.parse(r.data) : []));
+const elegidos = $('Elegir a calificar').all().map((i) => i.json);
+const leerFilas = (r) => { try { if (Array.isArray(r)) return r; if (r && Array.isArray(r.data)) return r.data; if (r && typeof r.data === 'string') { const p = JSON.parse(r.data); return Array.isArray(p) ? p : []; } } catch (e) {} return []; };
+const historiales = $input.all().map((i) => leerFilas(i.json));
+return elegidos.map((yo, k) => {
+const filas = historiales[k] || [];
 const historial = filas.map((h) => `${h.rol === 'cliente' ? 'Cliente' : 'WIP'}: ${String(h.texto || '').replace(/\s+/g, ' ').slice(0, 600)}`).join('\n').slice(-12000);
 const SECTORES = ['Grúas', 'Asistencias', 'Salud y asistencia médica', 'Laboratorio clínico', 'Mantenimiento', 'Instalaciones', 'Internet y telecomunicaciones', 'Limpieza', 'Funeraria', 'Servicio técnico', 'Transporte', 'Domicilios y mensajería', 'Ventas y distribución', 'Taxis', 'Otro'];
 const sistema = `Calificas leads de WIP, un software para gestionar servicios en campo (el equipo recibe y cierra servicios en una app, la empresa ve en tiempo real ubicación, tiempos, fotos, firmas y reportes).
@@ -51,16 +54,21 @@ return { json: { lead_id: yo.lead_id, pedido: {
   tool_choice: { type: 'tool', name: 'calificar' },
   messages: [{ role: 'user', content: `Conversación de WhatsApp con el lead "${yo.nombre || ''}":\n\n${historial || '(sin mensajes guardados)'}` }],
 } } };
+});
 
-// == Calificación en Kommo (Code, una vez por cada elemento)
+// == Calificación en Kommo (Code, una vez para todos los elementos)
 const SECTOR = { 'Grúas': 454306, 'Asistencias': 454308, 'Salud y asistencia médica': 454310, 'Laboratorio clínico': 454312, 'Mantenimiento': 454314, 'Instalaciones': 454316,
   'Internet y telecomunicaciones': 454318, 'Limpieza': 454320, 'Funeraria': 454322, 'Servicio técnico': 454324, 'Transporte': 454326, 'Domicilios y mensajería': 454328,
   'Ventas y distribución': 454330, 'Taxis': 454332, 'Otro': 454334 };
 const ENCAJA = { si: 454336, no: 454338, por_confirmar: 454340 }, CALIFICACION = { A: 454342, B: 454344, C: 454346 }, OPERACION = { propio: 454348, terceros: 454350, ambos: 454352 };
 const CAMPO = { sector: 555776, encaja: 555778, calificacion: 555780, servicios: 555782, operacion: 555784, pais: 555786, resumen: 555788, calificado: 555790, tipo: 554680 };
-const lead_id = $('Pedido a Claude (calificador)').item.json.lead_id;
-const uso = (($json.content || []).find((c) => c.type === 'tool_use') || {}).input;
-if (!uso) return { json: { lead_id, omitir: true } };
+const pedidos = $('Pedido a Claude (calificador)').all().map((i) => i.json);
+const respuestas = $input.all().map((i) => i.json);
+const salida = [];
+for (let k = 0; k < pedidos.length; k++) {
+const lead_id = pedidos[k].lead_id;
+const uso = (((respuestas[k] || {}).content || []).find((c) => c.type === 'tool_use') || {}).input;
+if (!uso || !lead_id) continue;
 const v = (id, valor) => ({ field_id: id, values: [valor] });
 const campos = [v(CAMPO.encaja, { enum_id: ENCAJA[uso.encaja] }), v(CAMPO.calificacion, { enum_id: CALIFICACION[uso.calificacion] }),
   v(CAMPO.resumen, { value: String(uso.resumen || '').slice(0, 1000) }), v(CAMPO.calificado, { value: Math.floor(Date.now() / 1000) })];
@@ -69,4 +77,6 @@ if (uso.tipo_servicio) campos.push(v(CAMPO.tipo, { value: String(uso.tipo_servic
 if (Number.isFinite(uso.servicios_mes)) campos.push(v(CAMPO.servicios, { value: uso.servicios_mes }));
 if (OPERACION[uso.operacion]) campos.push(v(CAMPO.operacion, { enum_id: OPERACION[uso.operacion] }));
 if (uso.pais) campos.push(v(CAMPO.pais, { value: String(uso.pais).slice(0, 60) }));
-return { json: { lead_id, cuerpo: [{ id: lead_id, custom_fields_values: campos }] } };
+salida.push({ json: { lead_id, cuerpo: [{ id: lead_id, custom_fields_values: campos }] } });
+}
+return salida;

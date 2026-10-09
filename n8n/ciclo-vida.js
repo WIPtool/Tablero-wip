@@ -128,6 +128,13 @@ for (const l of leads) {
     let plantilla = null;
     if (hechos === 0 && callado >= 7) plantilla = !tipo ? 'C' : ((campo(l, CAMPO.calificacion) || {}).enum_id === CALIFICACION_A ? 'A' : 'B');
     else if (hechos === 1 && callado >= 21 && desdeRetome >= 7) plantilla = tipo ? 'D' : 'E';
+    // Si ya tuvo reunión o propuesta y no sabemos su servicio, las plantillas genéricas (C, E) no tienen sentido: tarea para retomarlo
+    // personalmente (una vez cada 21 días) en vez de mensaje automático.
+    const avanzado = cambios.some((c) => Number(c.lead_id) === Number(l.id) && [REUNION_AGENDADA, 112413259, PROPUESTA, 112413263].includes(Number(c.a_etapa)));
+    if (plantilla && avanzado && (plantilla === 'C' || plantilla === 'E')) {
+      if (desdeRetome >= 21) { tarea(l, 'Retomar personalmente: ya tuvo reunión o propuesta y está en Sin respuesta.'); contar('tarea_retomar_avanzado'); }
+      continue;
+    }
     if (!plantilla || !BOTS[plantilla]) continue;
     retomes++;
     salida.bots.push({ bot_id: BOTS[plantilla], entity_id: l.id, entity_type: 2 });
