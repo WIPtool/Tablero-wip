@@ -31,7 +31,7 @@ declare
   a_desde date := coalesce(p_comparar, p_desde - n);
   a_hasta date := a_desde + n - 1;
   o_agendada int := (select orden from kommo_etapa where nombre ilike 'reuni%n agendada' limit 1);
-  -- Etapas en las que responde el agente: Leads entrantes, Nuevo y Sin respuesta (retomar).
+  -- Etapas en las que responde el agente: Leads entrantes (Incoming leads), En conversación y Sin respuesta (retomar).
   etapas_agente bigint[] := array[112413247, 112413251, 112730823];
 begin
   perform exigir_equipo();
@@ -188,3 +188,5 @@ begin
   );
 end $$;
 revoke all on function tablero_agente(date, date, date) from anon;
+revoke all on function agente_paso(text) from anon;
+revoke all on function agente_tiene_correo(text) from anon;

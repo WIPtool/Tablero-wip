@@ -48,7 +48,7 @@ export default async function PaginaAgente({ searchParams }: { searchParams: Pro
       </Aviso>
       {sinRespuesta.length > 0 && (
         <Aviso>
-          {sinRespuesta.length === 1 ? 'Hay 1 conversación' : `Hay ${sinRespuesta.length} conversaciones`} en Leads entrantes, Nuevo o Sin respuesta
+          {sinRespuesta.length === 1 ? 'Hay 1 conversación' : `Hay ${sinRespuesta.length} conversaciones`} en Leads entrantes, En conversación o Sin respuesta
           donde lo último lo escribió la persona hace más de 10 minutos y el agente no respondió. Están en la tabla <strong className="font-semibold">Esperando respuesta</strong>.
         </Aviso>
       )}
