@@ -91,6 +91,8 @@ export interface Embudo {
 export interface Agente {
   kpis: Kpis;
   serie: { fecha: string; conversaciones: number; respuestas: number; seguimientos: number }[];
-  conversaciones: { lead_id: number; nombre: string; origen: string; etapa: string; recibidos: number; respuestas: number; traspaso: string; seguimiento: string; ultimo_mensaje: string; ultimo: string; kommo: string }[];
-  por_origen: { origen: string; atendidas: number; reuniones: number; traspasos: number }[];
+  guion?: { orden: number; paso: string; conversaciones: number; tasa: number | null }[];
+  sin_respuesta?: { ultimo: string; nombre: string; origen: string; etapa: string; ultimo_mensaje: string; kommo: string }[];
+  conversaciones: { lead_id: number; nombre: string; origen: string; etapa: string; recibidos: number; respuestas: number; paso: string; correo: string; traspaso: string; seguimiento: string; ultimo_mensaje: string; ultimo: string; kommo: string }[];
+  por_origen: { origen: string; atendidas: number; correos: number; reuniones: number; traspasos: number }[];
 }
