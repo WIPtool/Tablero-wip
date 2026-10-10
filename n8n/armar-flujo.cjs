@@ -61,6 +61,8 @@ const RUTA_BREVO = 'brevo-kommo-e916b8396dcee1b7424b';
 const RUTA_GADS = 'gads-7c1e4b9a2f6d48e3a51c';
 
 const lotes = { batching: { batch: { batchSize: 1, batchInterval: 300 } } };
+// Reintentos de las llamadas a Claude (sobrecarga o error pasajero): 3 intentos con 5 s de espera.
+const REINTENTOS = { retryOnFail: true, maxTries: 3, waitBetweenTries: 5000 };
 const guardar = (id, posicion) => ({
   id, name: 'Guardar en Supabase', type: 'n8n-nodes-base.httpRequest', typeVersion: 4.2, position: posicion,
   parameters: {
@@ -191,7 +193,7 @@ const SEGUIMIENTO = (() => {
     { ...http(id(6), 'Claude (seguimiento)', [1060, y], { parameters: { method: 'POST', url: 'https://api.anthropic.com/v1/messages',
       authentication: 'predefinedCredentialType', nodeCredentialType: 'anthropicApi',
       sendHeaders: true, headerParameters: { parameters: [{ name: 'anthropic-version', value: '2023-06-01' }] }, ...cuerpo('$json.pedido') },
-      credentials: CRED_CLAUDE }), onError: 'continueRegularOutput' },
+      credentials: CRED_CLAUDE }), onError: 'continueRegularOutput', ...REINTENTOS },
     { id: id(7), name: 'Seguimiento de Claude', type: 'n8n-nodes-base.code', typeVersion: 2, position: [1220, y],
       parameters: { mode: 'runOnceForEachItem', jsCode: preparar(AGENTE['Seguimiento de Claude']) } },
     codigoTexto(id(12), 'Decisiones a guardar', [1300, y], 'return $input.all().filter((i) => !i.json.fallo).map((i) => ({ json: i.json }));\n'),
@@ -336,7 +338,7 @@ const CALIFICADOR = (() => {
     { ...http(id(8), 'Claude (calificador)', [1380, y], { parameters: { method: 'POST', url: 'https://api.anthropic.com/v1/messages',
       authentication: 'predefinedCredentialType', nodeCredentialType: 'anthropicApi',
       sendHeaders: true, headerParameters: { parameters: [{ name: 'anthropic-version', value: '2023-06-01' }] }, ...cuerpo('$json.pedido') },
-      credentials: CRED_CLAUDE }), onError: 'continueRegularOutput' },
+      credentials: CRED_CLAUDE }), onError: 'continueRegularOutput', ...REINTENTOS },
     { ...codigoTexto(id(9), 'Calificación en Kommo', [1540, y], CA['Calificación en Kommo']), onError: 'continueRegularOutput' },
     { ...http(id(10), 'Guardar calificación', [1700, y], { parameters: { method: 'PATCH', url: 'https://wiptool.kommo.com/api/v4/leads', ...auth,
       ...cuerpo('$json.cuerpo') }, credentials: CRED.kommo }), onError: 'continueRegularOutput' },
@@ -527,10 +529,10 @@ if (CRED_CLAUDE) {
       { ...http(id(19), 'Mensajes enviados', [1175, 160], { parameters: { url: "={{ $('Anuncio a buscar').first().json.url_enviados }}", ...auth }, credentials: CRED.kommo }),
         executeOnce: true, alwaysOutputData: true, onError: 'continueRegularOutput' },
       codigoTexto(id(7), 'Decidir y preguntar a Claude', [1200, 0], conComun(AGENTE['Decidir y preguntar a Claude']).split('__INSTRUCCIONES__').join(INSTRUCCIONES).split('__MODO_PRUEBA__').join(String(MODO_PRUEBA))),
-      http(id(8), 'Claude', [1400, 0], { parameters: { method: 'POST', url: 'https://api.anthropic.com/v1/messages',
+      { ...http(id(8), 'Claude', [1400, 0], { parameters: { method: 'POST', url: 'https://api.anthropic.com/v1/messages',
         authentication: 'predefinedCredentialType', nodeCredentialType: 'anthropicApi',
         sendHeaders: true, headerParameters: { parameters: [{ name: 'anthropic-version', value: '2023-06-01' }] }, ...cuerpoJson('$json.pedido') },
-        credentials: CRED_CLAUDE }),
+        credentials: CRED_CLAUDE }), ...REINTENTOS },
       codigoTexto(id(9), 'Respuesta de Claude', [1600, 0], conComun(AGENTE['Respuesta de Claude'])
         .split('__CAMPO_RESPUESTA__').join(String(CAMPO_RESPUESTA)).split('__BOT_RESPUESTA__').join(String(BOT_RESPUESTA))
         .split('__LISTA_INFO__').join(String(LISTA_INFO)).split('__CAMPO_SECUENCIA__').join(String(CAMPO_SECUENCIA))
