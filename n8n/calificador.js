@@ -42,7 +42,7 @@ Fuera de perfil (encaja = "no"): domicilios, delivery, última milla, mensajerí
 Si la conversación no dice a qué se dedica la empresa, encaja = "por_confirmar".
 Calificación: A = encaja y mostró interés concreto (pidió precio, demo o información, dio su correo, contó volumen o equipo); B = encaja pero la conversación quedó al inicio; C = no encaja o no hay datos suficientes.
 tipo_servicio: frase corta en minúsculas que complete "los servicios de ___ de tu empresa" (por ejemplo "grúas", "mantenimiento de aires acondicionados", "internet"); vacío si no se sabe.
-Usa solo lo que dice la conversación; no inventes datos.`;
+Usa solo lo que dice la conversación; no inventes datos. Responde siempre llamando la herramienta calificar, sin texto adicional.`;
 return { json: { lead_id: yo.lead_id, pedido: {
   model: MODELO, max_tokens: 600, system: sistema,
   tools: [{ name: 'calificar', description: 'Guarda la calificación del lead', input_schema: { type: 'object', properties: {
@@ -51,7 +51,7 @@ return { json: { lead_id: yo.lead_id, pedido: {
     servicios_mes: { type: ['integer', 'null'] }, operacion: { type: ['string', 'null'], enum: ['propio', 'terceros', 'ambos', null] },
     pais: { type: ['string', 'null'] }, resumen: { type: 'string', description: 'Una o dos frases: qué empresa es, qué necesita y en qué quedó.' },
   }, required: ['sector', 'encaja', 'calificacion', 'resumen'] } }],
-  tool_choice: { type: 'tool', name: 'calificar' },
+  tool_choice: { type: 'auto' }, // este modelo no acepta forzar la herramienta (type 'tool' o 'any')
   messages: [{ role: 'user', content: `Conversación de WhatsApp con el lead "${yo.nombre || ''}":\n\n${historial || '(sin mensajes guardados)'}` }],
 } } };
 });
