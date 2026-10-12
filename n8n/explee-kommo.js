@@ -59,7 +59,7 @@ return nuevos.map((n, i) => {
       ...(f.telefono ? [campo('PHONE', f.telefono, 'WORK')] : []),
       ...(f.cargo ? [campo('POSITION', f.cargo)] : []),
     ] }];
-    if (f.empresa) lead._embedded.companies = [{ name: f.empresa, custom_fields_values: f.dominio ? [campo('WEB', f.dominio)] : [] }];
+    if (f.empresa) lead._embedded.companies = [{ name: f.empresa, ...(f.dominio ? { custom_fields_values: [campo('WEB', f.dominio)] } : {}) }];
   }
   return { json: { ...base, accion: 'creado', contacto_id: contacto ? contacto.id : null, metodo: 'POST', url: `${BASE}/leads/complex`, cuerpo: [lead] } };
 });
