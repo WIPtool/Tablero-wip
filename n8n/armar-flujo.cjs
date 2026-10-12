@@ -11,6 +11,8 @@
 //    Necesita CRED_CLAUDE=<id de la credencial Anthropic "Claude (agente WhatsApp)">; con ella F12 también lleva el agente de seguimiento.
 //  - f19-recordatorio-demo.json: recordatorio de la demo virtual 20 min antes (recordatorio-demo.js); para
 //    Google Calendar, CRED_GCAL=<id de la credencial "Google Calendar (lectura)">.
+//  - f20-asunto-demo.json: asunto "Acercamiento Wip" e invitación a Jessica en las demos de Calendly (asunto-demo.js); solo con
+//    CRED_GCAL_COMERCIAL=<id de la credencial "Google Calendar (comercial@)">.
 // Uso: AGENTE_EN_VIVO=1 SEGUIMIENTO_EN_VIVO=1 CRED_CALENDLY=0U9bkwTaH0qwcc9h CRED_CLAUDE=lI6pyiToLgn65AwG node n8n/armar-flujo.cjs  (ids de las credenciales "Calendly (lectura)" y "Claude (agente WhatsApp)" en n8n)
 // Las credenciales se referencian por id (se crean a mano en n8n; las claves nunca van en este repositorio).
 const fs = require('fs');
@@ -42,7 +44,9 @@ const BOT_RECORDATORIO = 16852; // Salesbot "Agente WhatsApp: plantilla recordat
 const BOT_DEMO_20 = 18044;    // Salesbot "Agente WhatsApp: recordatorio demo 20 min" (plantilla 9568, aprobada por Meta)
 const CAMPO_ENLACE = 546606;    // Kommo · oportunidad: "Enlace de reunión"
 // Google Calendar (lectura) para F19: credencial OAuth de n8n (calendar.readonly); sin ella F19 solo mira Calendly.
-const CRED_GCAL = process.env.CRED_GCAL ? { googleCalendarOAuth2Api: { id: process.env.CRED_GCAL, name: 'Google Calendar (lectura)' } } : null;
+const CRED_GCAL_COMERCIAL = process.env.CRED_GCAL_COMERCIAL
+  ? { googleCalendarOAuth2Api: { id: process.env.CRED_GCAL_COMERCIAL, name: 'Google Calendar (comercial@)' } } : null;
+const CRED_GCAL = process.env.CRED_GCAL ?{ googleCalendarOAuth2Api: { id: process.env.CRED_GCAL, name: 'Google Calendar (lectura)' } } : null;
 // Modo prueba del agente: responde solo a oportunidades con la etiqueta "Prueba agente". AGENTE_EN_VIVO=1 lo quita.
 const MODO_PRUEBA = process.env.AGENTE_EN_VIVO !== '1';
 // Seguimiento: sin SEGUIMIENTO_EN_VIVO=1 solo guarda en Supabase los mensajes que propone (borrador), sin enviarlos.
@@ -676,6 +680,31 @@ if (CRED_CALENDLY && BOT_DEMO_20) {
     pinData: {},
   };
   fs.writeFileSync(path.join(__dirname, 'f19-recordatorio-demo.json'), JSON.stringify(f19, null, 2));
+}
+// F20 · Asunto e invitación de las demos de Calendly (asunto-demo.js), con CRED_GCAL_COMERCIAL (Google Calendar de comercial@).
+if (CRED_GCAL_COMERCIAL) {
+  const AD = partes('asunto-demo.js');
+  const id = (k) => `f7f0c0de-00${String(k).padStart(2, '0')}-4000-8000-0000000000${String(k).padStart(2, '0')}`;
+  const gcal = { authentication: 'predefinedCredentialType', nodeCredentialType: 'googleCalendarOAuth2Api' };
+  const f20 = {
+    name: 'F20 · Asunto e invitación de las demos de Calendly (Google Calendar de comercial@)',
+    nodes: [
+      { id: id(1), name: 'Cada 5 minutos', type: 'n8n-nodes-base.scheduleTrigger', typeVersion: 1.2, position: [0, 0],
+        parameters: { rule: { interval: [{ field: 'cronExpression', expression: '*/5 * * * *' }] } } },
+      http(id(2), 'Demos de Calendly', [220, 0], { parameters: { ...gcal,
+        url: "=https://www.googleapis.com/calendar/v3/calendars/primary/events?singleEvents=true&maxResults=100&q=calendly&timeMin={{ encodeURIComponent(new Date(Date.now() - 3600000).toISOString()) }}" },
+        credentials: CRED_GCAL_COMERCIAL }),
+      codigoTexto(id(3), 'Demos por ajustar', [440, 0], AD['Demos por ajustar']),
+      { ...http(id(4), 'Asunto e invitada', [660, 0], { parameters: { method: 'PATCH', ...gcal,
+        url: '=https://www.googleapis.com/calendar/v3/calendars/primary/events/{{ $json.id }}?sendUpdates=none',
+        sendBody: true, specifyBody: 'json', jsonBody: '={{ JSON.stringify($json.cuerpo) }}' }, credentials: CRED_GCAL_COMERCIAL }),
+        onError: 'continueRegularOutput' },
+    ],
+    connections: { 'Cada 5 minutos': a('Demos de Calendly'), 'Demos de Calendly': a('Demos por ajustar'), 'Demos por ajustar': a('Asunto e invitada') },
+    settings: { executionOrder: 'v1', timezone: 'America/Bogota', errorWorkflow: '3TLZE8II6vrchutQ' },
+    pinData: {},
+  };
+  fs.writeFileSync(path.join(__dirname, 'f20-asunto-demo.json'), JSON.stringify(f20, null, 2));
 }
 fs.writeFileSync(path.join(__dirname, 'f14-google-ads.json'), JSON.stringify(f14, null, 2));
 console.log('ok · webhook de Google Ads: https://wiptool.app.n8n.cloud/webhook/' + RUTA_GADS);
