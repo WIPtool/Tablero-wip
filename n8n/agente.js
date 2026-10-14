@@ -170,12 +170,15 @@ const anuncio = $('Anuncio de Meta').all().map((i) => i.json).find((a) => a.text
 const ctx = contextoAgente(lead, anuncio);
 const mensajes = mensajesClaude(historial);
 if (mensajes[mensajes.length - 1].role !== 'user') return [];
-const sistema = `__INSTRUCCIONES__
-
-${ctx.texto}
+// Dos bloques: las instrucciones (fijas) van en caché por 1 hora; la hora y los datos del lead cambian en cada pedido y van después,
+// para no romper el caché (se cobra como lectura de caché, cerca del 10%, mientras alguien escriba dentro de la hora).
+const sistema = [
+  { type: 'text', text: `__INSTRUCCIONES__`, cache_control: { type: 'ephemeral', ttl: '1h' } },
+  { type: 'text', text: `${ctx.texto}
 
 # Formato de salida
-Responde SIEMPRE llamando la herramienta responder, una sola vez, con el mensaje de WhatsApp en respuesta. No escribas texto fuera de la herramienta.`;
+Responde SIEMPRE llamando la herramienta responder, una sola vez, con el mensaje de WhatsApp en respuesta. No escribas texto fuera de la herramienta.` },
+];
 const herramienta = {
   name: 'responder',
   description: 'Devuelve el próximo mensaje de WhatsApp para la persona y lo que aprendiste de ella.',
@@ -296,9 +299,8 @@ for (const p of pendientes) {
   const horas = Math.round((Date.now() - new Date(p.ult_agente).getTime()) / 3600000);
   const mensajes = mensajesClaude(historial);
   mensajes.push({ role: 'user', content: `(Nota interna, no la escribió la persona: no ha respondido tu último mensaje hace ${horas} horas. Decide si conviene escribirle una vez más y, si conviene, escribe el mensaje de seguimiento.)` });
-  const sistema = `__INSTRUCCIONES__
-
-${ctx.texto}
+  // Las instrucciones fijas van en caché por 1 hora (igual que en Respuesta del agente); lo que cambia por lead va en el segundo bloque.
+  const sistema = [{ type: 'text', text: `__INSTRUCCIONES__`, cache_control: { type: 'ephemeral', ttl: '1h' } }, { type: 'text', text: `${ctx.texto}
 
 # Tarea: mensaje de seguimiento
 La persona dejó de responder. Escribe UN mensaje corto de seguimiento (máximo 20 palabras) que retome la conversación con naturalidad:
@@ -310,7 +312,7 @@ La persona dejó de responder. Escribe UN mensaje corto de seguimiento (máximo 
 No escribas (enviar = false) si la persona cerró la conversación: dijo que no le interesa, que no la contacten, que ya agendó, que lo revisará y avisará, o se despidió.
 
 # Formato de salida
-Responde SIEMPRE llamando la herramienta seguimiento, una sola vez. No escribas texto fuera de la herramienta.`;
+Responde SIEMPRE llamando la herramienta seguimiento, una sola vez. No escribas texto fuera de la herramienta.` }];
   const herramienta = {
     name: 'seguimiento',
     description: 'Decide si se le escribe a la persona y devuelve el mensaje de seguimiento.',
