@@ -1,5 +1,5 @@
 -- Operaciones › Servicios (2026-10-15): servicios que se crean en la plataforma WIP (base MongoDB de producción).
--- Un trigger programado de Atlas (atlas/conteo-servicios.js) cuenta los servicios por día de creación (hora de Colombia),
+-- Un trigger programado de Atlas (atlas/conteo-servicios.js, una vez al día a las 12 m.) cuenta los servicios por día de creación (hora de Colombia),
 -- cliente (owner.name), tipo de servicio y estado actual, y los carga aquí con cargar_servicios_atlas(). A Supabase solo
 -- llegan esos conteos, nunca datos de los servicios.
 -- Como el estado cambia después de creado el servicio, cada carga reemplaza los últimos días (no solo el de hoy).

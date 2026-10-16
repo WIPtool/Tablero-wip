@@ -1,9 +1,11 @@
 // Trigger programado de MongoDB Atlas "Tablero WIP · conteo de servicios" (proyecto wipglobal-platform-PROD).
-// Corre cada hora dentro de Atlas: cuenta los servicios de ServicesDB.Service por día de creación (hora de Colombia),
+// Corre una vez al día (12 m. de Colombia, cron 0 17 * * * en UTC) dentro de Atlas: cuenta los servicios de ServicesDB.Service por día de creación (hora de Colombia),
 // compañía (owner.name), tipo y estado actual, y manda SOLO esos conteos a Supabase (cargar_servicios_atlas,
 // supabase/022_servicios_plataforma.sql). Ningún dato de los servicios sale de Atlas.
 //
 // - Sin argumentos (el trigger): recarga los últimos DIAS días, porque el estado cambia después de creado el servicio.
+//   ServicesDB.Service no tiene índice que empiece por createdDate: cada corrida recorre la colección (~800 mil, unos
+//   segundos). No se filtra por _id porque su fecha no siempre coincide con createdDate (a veces es meses anterior).
 // - Histórico, a mano desde el editor de la función: exports('2023-01-01') o exports('2023-01-01', '2024-12-31').
 //   Rangos largos se mandan por meses.
 // - La clave de carga es el Value "claveTablero" (enlazado al Secret "claveTableroSecreto"); se ve en Supabase con
