@@ -1,5 +1,5 @@
 // Trigger programado de MongoDB Atlas "Tablero WIP · conteo de servicios" (proyecto wipglobal-platform-PROD).
-// Corre una vez al día (12 m. de Colombia, cron 0 17 * * * en UTC) dentro de Atlas: cuenta los servicios de ServicesDB.Service por día de creación (hora de Colombia),
+// Corre una vez al día (3 a. m. de Colombia, cron 0 8 * * * en UTC) dentro de Atlas: cuenta los servicios de ServicesDB.Service por día de creación (hora de Colombia),
 // compañía (owner.name), tipo y estado actual, y manda SOLO esos conteos a Supabase (cargar_servicios_atlas,
 // supabase/022_servicios_plataforma.sql). Ningún dato de los servicios sale de Atlas.
 //

@@ -107,3 +107,12 @@ export interface Servicios {
   por_estado: { estado: string; este_mes: number; periodo: number }[];
   por_cliente_mes: { mes: string; cliente: string; servicios: number }[];
 }
+// Operaciones › Servicios, vista "Por días" (supabase/023_servicios_por_dias.sql).
+export interface ServiciosDias {
+  ultimo_dia: string | null;
+  kpis: Kpis;
+  serie: { fecha: string; servicios: number; finalizados: number }[];
+  por_cliente: { cliente: string; servicios: number; servicios_ant: number; finalizados: number; cancelados: number; tasa_finalizados: number | null }[];
+  por_tipo: { tipo: string; servicios: number; servicios_ant: number }[];
+  por_estado: { estado: string; servicios: number; servicios_ant: number }[];
+}

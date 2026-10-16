@@ -327,3 +327,20 @@ function servicios({ p_meses = 12 }) {
   };
 }
 demo.tablero_servicios = servicios;
+
+// Operaciones › Servicios, vista por días (ejemplo).
+function serviciosDias({ p_desde, p_hasta }) {
+  const serie = dias(p_desde, p_hasta).map((fecha) => { const x = azar('sd' + fecha)(); const s = Math.round(450 + x * 250); return { fecha, servicios: s, finalizados: Math.round(s * 0.84) }; });
+  const total = serie.reduce((a, x) => a + x.servicios, 0), fin = serie.reduce((a, x) => a + x.finalizados, 0);
+  const CLIENTES = [['Asisya', 0.2], ['Fixit', 0.17], ['Constructora Bolívar', 0.14], ['Auxilia', 0.1], ['Hisercol', 0.06]];
+  return {
+    ultimo_dia: hoyBogota(),
+    kpis: { servicios: total, servicios_ant: Math.round(total * 0.94), finalizados: fin, finalizados_ant: Math.round(fin * 0.95), cancelados: Math.round(total * 0.06),
+      cancelados_ant: Math.round(total * 0.07), clientes: 32, clientes_ant: 35, por_dia: Math.round(total / serie.length), por_dia_ant: Math.round(total * 0.94 / serie.length) },
+    serie,
+    por_cliente: CLIENTES.map(([cliente, t]) => ({ cliente, servicios: Math.round(total * t), servicios_ant: Math.round(total * t * 0.9), finalizados: Math.round(total * t * 0.85), cancelados: Math.round(total * t * 0.06), tasa_finalizados: 0.85 })),
+    por_tipo: [['Grúa', 0.3], ['Diligencia', 0.25], ['Asistencia jurídica', 0.15]].map(([tipo, t]) => ({ tipo, servicios: Math.round(total * t), servicios_ant: Math.round(total * t * 0.9) })),
+    por_estado: [['Finalizado', 0.84], ['Cancelado', 0.06], ['Pendiente', 0.06]].map(([estado, t]) => ({ estado, servicios: Math.round(total * t), servicios_ant: Math.round(total * t * 0.95) })),
+  };
+}
+demo.tablero_servicios_dias = serviciosDias;
