@@ -284,3 +284,46 @@ function agente({ p_desde, p_hasta }) {
   };
 }
 demo.tablero_agente = agente;
+
+// Operaciones › Servicios (ejemplo): servicios creados en la plataforma por mes y cliente.
+function servicios({ p_meses = 12 }) {
+  const hoy = hoyBogota();
+  const mesHoy = hoy.slice(0, 7) + '-01';
+  const mesMenos = (k) => { const d = new Date(mesHoy + 'T00:00:00Z'); d.setUTCMonth(d.getUTCMonth() - k); return d.toISOString().slice(0, 10); };
+  const CLIENTES = [['Asisya', 900], ['Auxilia', 520], ['Fixit', 310], ['Hisercol', 180], ['Sotrandes', 120], ['Avise Asistencia', 90], ['Ecoguardian', 40]];
+  const TIPOS = [['Grúa', 0.38], ['Cerrajería', 0.17], ['Plomería', 0.15], ['Mantenimiento', 0.14], ['Electricista', 0.1], ['Inspección', 0.06]];
+  const ESTADOS = [['Finalizado', 0.82], ['Cancelado', 0.09], ['En curso', 0.05], ['Asignado', 0.04]];
+  const avance = Number(hoy.slice(8, 10)) / 30;
+  const porClienteMes = [];
+  for (let k = Math.max(2, p_meses) - 1; k >= 0; k--) {
+    const mes = mesMenos(k);
+    CLIENTES.forEach(([cliente, base], i) => {
+      if (k > 9 - i) return; // los clientes pequeños llegaron después
+      const v = Math.round(base * (0.8 + azar(mes + cliente)() * 0.35) * (1 + (12 - k) * 0.02) * (k === 0 ? avance : 1));
+      porClienteMes.push({ mes, cliente, servicios: v });
+    });
+  }
+  const sumaMes = (mes) => porClienteMes.filter((x) => x.mes === mes).reduce((a, x) => a + x.servicios, 0);
+  const meses = Array.from({ length: Math.max(2, p_meses) }, (_, i) => mesMenos(Math.max(2, p_meses) - 1 - i));
+  const serie = meses.map((fecha) => ({ fecha, servicios: sumaMes(fecha), clientes: porClienteMes.filter((x) => x.mes === fecha && x.servicios).length }));
+  const periodo = serie.reduce((a, x) => a + x.servicios, 0);
+  const esteMes = sumaMes(mesHoy), anterior = sumaMes(mesMenos(1));
+  const completos = serie.slice(0, -1);
+  const reparte = (lista, total) => lista.map(([n, t]) => [n, Math.round(total * t)]);
+  return {
+    ultimo_dia: hoy,
+    kpis: { este_mes: esteMes, este_mes_ant: Math.round(anterior * avance * 0.95), mes_anterior: anterior, mes_anterior_ant: sumaMes(mesMenos(2)),
+      promedio_12: Math.round(completos.slice(-12).reduce((a, x) => a + x.servicios, 0) / 12), clientes_mes: serie.at(-1).clientes, clientes_mes_ant: serie.at(-2).clientes, periodo },
+    serie,
+    por_cliente: CLIENTES.map(([cliente]) => {
+      const f = porClienteMes.filter((x) => x.cliente === cliente);
+      const total = f.reduce((a, x) => a + x.servicios, 0);
+      return { cliente, este_mes: f.find((x) => x.mes === mesHoy)?.servicios ?? 0, mes_anterior: f.find((x) => x.mes === mesMenos(1))?.servicios ?? 0,
+        periodo: total, promedio: Math.round((total - (f.find((x) => x.mes === mesHoy)?.servicios ?? 0)) / completos.length), ultimo: hoy };
+    }),
+    por_tipo: reparte(TIPOS, periodo).map(([tipo, v]) => ({ tipo, este_mes: Math.round(v * esteMes / periodo), periodo: v })),
+    por_estado: reparte(ESTADOS, periodo).map(([estado, v]) => ({ estado, este_mes: Math.round(v * esteMes / periodo), periodo: v })),
+    por_cliente_mes: porClienteMes,
+  };
+}
+demo.tablero_servicios = servicios;

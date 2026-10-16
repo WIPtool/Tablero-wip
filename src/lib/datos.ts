@@ -96,3 +96,14 @@ export interface Agente {
   conversaciones: { lead_id: number; nombre: string; origen: string; etapa: string; recibidos: number; respuestas: number; paso: string; correo: string; traspaso: string; seguimiento: string; ultimo_mensaje: string; ultimo: string; kommo: string }[];
   por_origen: { origen: string; atendidas: number; correos: number; reuniones: number; traspasos: number }[];
 }
+
+// Operaciones › Servicios (supabase/022_servicios_plataforma.sql). La serie es por mes (fecha = día 1).
+export interface Servicios {
+  ultimo_dia: string | null;
+  kpis: Kpis;
+  serie: { fecha: string; servicios: number; clientes: number }[];
+  por_cliente: { cliente: string; este_mes: number; mes_anterior: number; periodo: number; promedio: number; ultimo: string }[];
+  por_tipo: { tipo: string; este_mes: number; periodo: number }[];
+  por_estado: { estado: string; este_mes: number; periodo: number }[];
+  por_cliente_mes: { mes: string; cliente: string; servicios: number }[];
+}
