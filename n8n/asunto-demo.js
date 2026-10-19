@@ -1,5 +1,5 @@
-// n8n · F20 · asunto e invitación de las demos de Calendly. armar-flujo.cjs toma cada parte por su marca "// ==".
-// Calendly gratis pone de asunto "Nombre y Meli de Wip" y no deja cambiarlo. Cada 5 minutos este flujo lee las demos que vienen
+// n8n · F12 · asunto e invitación de las demos de Calendly (antes F20, cada 5 minutos). armar-flujo.cjs toma cada parte por su marca "// ==".
+// Calendly gratis pone de asunto "Nombre y Meli de Wip" y no deja cambiarlo. Cada hora (en la corrida de F12) lee las demos que vienen
 // en el calendario de comercial@ (las que creó Calendly), les pone el asunto de WIP y agrega a Jessica como invitada.
 // Se guarda con sendUpdates=none: el cliente no recibe correo, pero el asunto nuevo se ve en su calendario y en el de Jessica.
 

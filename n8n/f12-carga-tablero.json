@@ -2708,6 +2708,85 @@
         }
       },
       "onError": "continueRegularOutput"
+    },
+    {
+      "id": "a1f0c0de-0901-4000-8000-000000000901",
+      "name": "Demos de Calendly",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        260,
+        2700
+      ],
+      "parameters": {
+        "method": "GET",
+        "url": "=https://www.googleapis.com/calendar/v3/calendars/primary/events?singleEvents=true&maxResults=100&q=calendly&timeMin={{ encodeURIComponent(new Date(Date.now() - 3600000).toISOString()) }}",
+        "options": {
+          "batching": {
+            "batch": {
+              "batchSize": 1,
+              "batchInterval": 300
+            }
+          }
+        },
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "googleCalendarOAuth2Api"
+      },
+      "credentials": {
+        "googleCalendarOAuth2Api": {
+          "id": "HYzI5UK7XVd09BpJ",
+          "name": "Google Calendar (comercial@)"
+        }
+      },
+      "onError": "continueRegularOutput",
+      "executeOnce": true
+    },
+    {
+      "id": "a1f0c0de-0902-4000-8000-000000000902",
+      "name": "Demos por ajustar",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        500,
+        2700
+      ],
+      "parameters": {
+        "jsCode": "const ASUNTO = 'Acercamiento Wip - Software para gestión de tus servicios';\nconst INVITADA = 'jessica@wiptool.com';\nconst salida = [];\nfor (const ev of ($input.first().json.items || [])) {\n  if (ev.status === 'cancelled' || !/calendly\\.com/i.test(ev.description || '')) continue;\n  const invitados = ev.attendees || [];\n  const falta = !invitados.some((p) => String(p.email || '').toLowerCase() === INVITADA);\n  if (ev.summary === ASUNTO && !falta) continue;\n  salida.push({ json: { id: ev.id, antes: ev.summary,\n    cuerpo: { summary: ASUNTO, ...(falta ? { attendees: [...invitados, { email: INVITADA }] } : {}) } } });\n}\nreturn salida;\n"
+      }
+    },
+    {
+      "id": "a1f0c0de-0903-4000-8000-000000000903",
+      "name": "Asunto e invitada",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        740,
+        2700
+      ],
+      "parameters": {
+        "method": "PATCH",
+        "url": "=https://www.googleapis.com/calendar/v3/calendars/primary/events/{{ $json.id }}?sendUpdates=none",
+        "options": {
+          "batching": {
+            "batch": {
+              "batchSize": 1,
+              "batchInterval": 300
+            }
+          }
+        },
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "googleCalendarOAuth2Api",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify($json.cuerpo) }}"
+      },
+      "credentials": {
+        "googleCalendarOAuth2Api": {
+          "id": "HYzI5UK7XVd09BpJ",
+          "name": "Google Calendar (comercial@)"
+        }
+      },
+      "onError": "continueRegularOutput"
     }
   ],
   "connections": {
@@ -2776,6 +2855,11 @@
           },
           {
             "node": "Trabajos ciclo",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Demos de Calendly",
             "type": "main",
             "index": 0
           }
@@ -2847,6 +2931,11 @@
           },
           {
             "node": "Trabajos ciclo",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Demos de Calendly",
             "type": "main",
             "index": 0
           }
@@ -3622,6 +3711,28 @@
         [
           {
             "node": "Nutrición Brevo (ciclo)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Demos de Calendly": {
+      "main": [
+        [
+          {
+            "node": "Demos por ajustar",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Demos por ajustar": {
+      "main": [
+        [
+          {
+            "node": "Asunto e invitada",
             "type": "main",
             "index": 0
           }
