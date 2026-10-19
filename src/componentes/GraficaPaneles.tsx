@@ -1,11 +1,12 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
-import { num, fechaCorta, fechaConDia } from '@/lib/formato';
+import { num, fechaCorta, fechaConDia, mesCorto, mesLargo } from '@/lib/formato';
 
 // Paneles apilados que comparten el eje de fechas (nunca dos escalas en un mismo eje). Con juntos=true todas las series
 // van en una sola gráfica con un único eje vertical (como Analytics): sirve cuando las cifras se pueden leer en la misma escala.
 // Un cursor recorre todos los paneles y muestra el detalle del día; también con las flechas del teclado.
+// Con porMes=true cada punto es un mes (fecha = día 1) y el eje y el detalle muestran el mes.
 export interface Panel { campo: string; etiqueta: string; forma: 'linea' | 'columnas'; color: string; area?: boolean }
 type Punto = { fecha: string } & Record<string, number | string>;
 
@@ -27,7 +28,9 @@ function columna(x: number, y: number, w: number, h: number) {
   return `M${x},${y + h}V${y + r}Q${x},${y} ${x + r},${y}H${x + w - r}Q${x + w},${y} ${x + w},${y + r}V${y + h}Z`;
 }
 
-export function GraficaPaneles({ serie, paneles, alto = 128, juntos = false }: { serie: Punto[]; paneles: Panel[]; alto?: number; juntos?: boolean }) {
+export function GraficaPaneles({ serie, paneles, alto = 128, juntos = false, porMes = false }: {
+  serie: Punto[]; paneles: Panel[]; alto?: number; juntos?: boolean; porMes?: boolean;
+}) {
   const caja = useRef<HTMLDivElement>(null);
   const [ancho, setAncho] = useState(0);
   const [activo, setActivo] = useState(-1);
@@ -52,6 +55,8 @@ export function GraficaPaneles({ serie, paneles, alto = 128, juntos = false }: {
   const banda = anchoUtil / n;
   const xc = (i: number) => M.izq + (i + 0.5) * banda;
   const cada = Math.max(1, Math.ceil(n / Math.max(2, Math.floor(anchoUtil / 78))));
+  const eje = porMes ? mesCorto : fechaCorta;
+  const detalle = porMes ? mesLargo : fechaConDia;
 
   const indice = (e: React.PointerEvent<SVGSVGElement>) => {
     const r = e.currentTarget.getBoundingClientRect();
@@ -65,7 +70,7 @@ export function GraficaPaneles({ serie, paneles, alto = 128, juntos = false }: {
   };
 
   const descripcion = paneles.map((p) => `${p.etiqueta}: ${num(serie.reduce((a, f) => a + (Number(f[p.campo]) || 0), 0))} en total`).join('. ')
-    + '. Use las flechas para recorrer los días.';
+    + `. Use las flechas para recorrer los ${porMes ? 'meses' : 'días'}.`;
 
   return (
     <div ref={caja} className="relative w-full">
@@ -81,7 +86,7 @@ export function GraficaPaneles({ serie, paneles, alto = 128, juntos = false }: {
             const marcas = [];
             for (let v = 0; v <= tope + 1e-9; v += paso) marcas.push(v);
             const columnas = grupo.filter((p) => p.forma === 'columnas');
-            const w = Math.max(1, Math.min(24, (banda - 2) / Math.max(1, columnas.length)));
+            const w = Math.max(1, Math.min(porMes ? 36 : 24, (banda - 2) / Math.max(1, columnas.length)));
             return (
               <g key={grupo.map((p) => p.campo).join('-')}>
                 {!juntos && <text x={M.izq} y={top - 9} className="fill-suave text-[11.5px] font-semibold">{grupo[0].etiqueta}</text>}
@@ -124,7 +129,7 @@ export function GraficaPaneles({ serie, paneles, alto = 128, juntos = false }: {
             );
           })}
           {serie.map((f, i) => (i % cada === 0 ? (
-            <text key={f.fecha} x={xc(i)} y={altoTotal - 6} textAnchor="middle" className="fill-tenue text-[11px]">{fechaCorta(f.fecha)}</text>
+            <text key={f.fecha} x={xc(i)} y={altoTotal - 6} textAnchor="middle" className="fill-tenue text-[11px]">{eje(f.fecha)}</text>
           ) : null))}
           {activo >= 0 && <line x1={xc(activo)} x2={xc(activo)} y1={M.arriba - 4} y2={altoTotal - M.abajo} className="stroke-tenue" />}
         </svg>
@@ -132,7 +137,7 @@ export function GraficaPaneles({ serie, paneles, alto = 128, juntos = false }: {
       {activo >= 0 && ancho > 0 && (
         <div className="pointer-events-none absolute z-10 -translate-x-1/2 -translate-y-full whitespace-nowrap rounded-lg bg-tinta px-2.5 py-2 text-xs leading-[1.45] text-fondo shadow-xl"
           style={{ left: Math.min(Math.max(xc(activo), 70), ancho - 70), top: M.arriba - 6 }}>
-          <b className="font-semibold">{fechaConDia(serie[activo].fecha)}</b>
+          <b className="font-semibold">{detalle(serie[activo].fecha)}</b>
           {paneles.map((p) => (
             <div key={p.campo}>
               <i className="mr-1.5 inline-block size-2 rounded-full" style={{ background: p.color }} />

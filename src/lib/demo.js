@@ -269,13 +269,78 @@ function agente({ p_desde, p_hasta }) {
   return {
     kpis: { atendidas, atendidas_ant: Math.round(atendidas * 0.8), recibidos: respuestas + conversaciones, recibidos_ant: respuestas, respuestas, respuestas_ant: Math.round(respuestas * 0.8),
       traspasos: Math.round(atendidas * 0.15), traspasos_ant: 2, reuniones: Math.round(atendidas * 0.2), reuniones_ant: 3, conversaciones, conversaciones_ant: Math.round(conversaciones * 0.8),
-      seguimientos: Math.round(atendidas * 0.4), seguimientos_ant: 4, reactivadas: Math.round(atendidas * 0.12), reactivadas_ant: 1 },
+      seguimientos: Math.round(atendidas * 0.4), seguimientos_ant: 4, reactivadas: Math.round(atendidas * 0.12), reactivadas_ant: 1,
+      correos: Math.round(atendidas * 0.25), correos_ant: 3, espera_mediana: 32, espera_mediana_ant: 41, sin_respuesta: 1 },
     serie,
+    guion: [['El agente respondió', 1], ['La persona siguió la conversación', 0.78], ['Preguntó el tipo de servicio', 0.7], ['Preguntó por la herramienta actual', 0.55],
+      ['Preguntó el reto', 0.46], ['Explicó WIP', 0.4], ['Ofreció la demo', 0.31], ['Envió el enlace de agenda', 0.22], ['Dio su correo', 0.25], ['Llegó a reunión', 0.2]]
+      .map(([paso, t], i) => ({ orden: i + 1, paso, conversaciones: Math.round(atendidas * t), tasa: atendidas ? Math.round(atendidas * t) / atendidas : null })),
+    sin_respuesta: [{ ultimo: p_hasta + 'T16:40:00Z', nombre: 'Refrigeración Caribe', origen: 'Meta Ads', etapa: 'Nuevo', ultimo_mensaje: '¿Cuál sería el costo de la aplicación?', kommo: 'https://wiptool.kommo.com/leads/detail/3' }],
     conversaciones: [
-      { lead_id: 1, nombre: 'Grúas del Norte', origen: 'Meta Ads', etapa: 'Reunión agendada', recibidos: 6, respuestas: 5, traspaso: 'No', seguimiento: 'Respondió', ultimo_mensaje: 'Listo, agendé para el jueves', ultimo: p_hasta + 'T15:20:00Z', kommo: 'https://wiptool.kommo.com/leads/detail/1' },
-      { lead_id: 2, nombre: 'Asistencias Andinas', origen: 'Instagram', etapa: 'Nuevo', recibidos: 3, respuestas: 2, traspaso: 'Sí', seguimiento: 'No', ultimo_mensaje: 'Prefiero que me llame un asesor', ultimo: p_hasta + 'T11:05:00Z', kommo: 'https://wiptool.kommo.com/leads/detail/2' },
+      { lead_id: 1, nombre: 'Grúas del Norte', origen: 'Meta Ads', etapa: 'Reunión agendada', recibidos: 6, respuestas: 5, paso: 'Envió agenda', correo: 'Sí', traspaso: 'No', seguimiento: 'Respondió', ultimo_mensaje: 'Listo, agendé para el jueves', ultimo: p_hasta + 'T15:20:00Z', kommo: 'https://wiptool.kommo.com/leads/detail/1' },
+      { lead_id: 2, nombre: 'Asistencias Andinas', origen: 'Instagram', etapa: 'Nuevo', recibidos: 3, respuestas: 2, paso: 'Tipo de servicio', correo: 'No', traspaso: 'Sí', seguimiento: 'No', ultimo_mensaje: 'Prefiero que me llame un asesor', ultimo: p_hasta + 'T11:05:00Z', kommo: 'https://wiptool.kommo.com/leads/detail/2' },
     ],
-    por_origen: [{ origen: 'Meta Ads', atendidas: Math.round(atendidas * 0.8), reuniones: Math.round(atendidas * 0.15), traspasos: 2 }, { origen: 'Instagram', atendidas: Math.round(atendidas * 0.2), reuniones: 1, traspasos: 1 }],
+    por_origen: [{ origen: 'Meta Ads', atendidas: Math.round(atendidas * 0.8), correos: Math.round(atendidas * 0.2), reuniones: Math.round(atendidas * 0.15), traspasos: 2 }, { origen: 'Instagram', atendidas: Math.round(atendidas * 0.2), correos: 1, reuniones: 1, traspasos: 1 }],
   };
 }
 demo.tablero_agente = agente;
+
+// Operaciones › Servicios (ejemplo): servicios creados en la plataforma por mes y cliente.
+function servicios({ p_meses = 12 }) {
+  const hoy = hoyBogota();
+  const mesHoy = hoy.slice(0, 7) + '-01';
+  const mesMenos = (k) => { const d = new Date(mesHoy + 'T00:00:00Z'); d.setUTCMonth(d.getUTCMonth() - k); return d.toISOString().slice(0, 10); };
+  const CLIENTES = [['Asisya', 900], ['Auxilia', 520], ['Fixit', 310], ['Hisercol', 180], ['Sotrandes', 120], ['Avise Asistencia', 90], ['Ecoguardian', 40]];
+  const TIPOS = [['Grúa', 0.38], ['Cerrajería', 0.17], ['Plomería', 0.15], ['Mantenimiento', 0.14], ['Electricista', 0.1], ['Inspección', 0.06]];
+  const ESTADOS = [['Finalizado', 0.82], ['Cancelado', 0.09], ['En curso', 0.05], ['Asignado', 0.04]];
+  const avance = Number(hoy.slice(8, 10)) / 30;
+  const porClienteMes = [];
+  for (let k = Math.max(2, p_meses) - 1; k >= 0; k--) {
+    const mes = mesMenos(k);
+    CLIENTES.forEach(([cliente, base], i) => {
+      if (k > 9 - i) return; // los clientes pequeños llegaron después
+      const v = Math.round(base * (0.8 + azar(mes + cliente)() * 0.35) * (1 + (12 - k) * 0.02) * (k === 0 ? avance : 1));
+      porClienteMes.push({ mes, cliente, servicios: v });
+    });
+  }
+  const sumaMes = (mes) => porClienteMes.filter((x) => x.mes === mes).reduce((a, x) => a + x.servicios, 0);
+  const meses = Array.from({ length: Math.max(2, p_meses) }, (_, i) => mesMenos(Math.max(2, p_meses) - 1 - i));
+  const serie = meses.map((fecha) => ({ fecha, servicios: sumaMes(fecha), clientes: porClienteMes.filter((x) => x.mes === fecha && x.servicios).length }));
+  const periodo = serie.reduce((a, x) => a + x.servicios, 0);
+  const esteMes = sumaMes(mesHoy), anterior = sumaMes(mesMenos(1));
+  const completos = serie.slice(0, -1);
+  const reparte = (lista, total) => lista.map(([n, t]) => [n, Math.round(total * t)]);
+  return {
+    ultimo_dia: hoy,
+    kpis: { este_mes: esteMes, este_mes_ant: Math.round(anterior * avance * 0.95), mes_anterior: anterior, mes_anterior_ant: sumaMes(mesMenos(2)),
+      promedio_12: Math.round(completos.slice(-12).reduce((a, x) => a + x.servicios, 0) / 12), clientes_mes: serie.at(-1).clientes, clientes_mes_ant: serie.at(-2).clientes, periodo },
+    serie,
+    por_cliente: CLIENTES.map(([cliente]) => {
+      const f = porClienteMes.filter((x) => x.cliente === cliente);
+      const total = f.reduce((a, x) => a + x.servicios, 0);
+      return { cliente, este_mes: f.find((x) => x.mes === mesHoy)?.servicios ?? 0, mes_anterior: f.find((x) => x.mes === mesMenos(1))?.servicios ?? 0,
+        periodo: total, promedio: Math.round((total - (f.find((x) => x.mes === mesHoy)?.servicios ?? 0)) / completos.length), ultimo: hoy };
+    }),
+    por_tipo: reparte(TIPOS, periodo).map(([tipo, v]) => ({ tipo, este_mes: Math.round(v * esteMes / periodo), periodo: v })),
+    por_estado: reparte(ESTADOS, periodo).map(([estado, v]) => ({ estado, este_mes: Math.round(v * esteMes / periodo), periodo: v })),
+    por_cliente_mes: porClienteMes,
+  };
+}
+demo.tablero_servicios = servicios;
+
+// Operaciones › Servicios, vista por días (ejemplo).
+function serviciosDias({ p_desde, p_hasta }) {
+  const serie = dias(p_desde, p_hasta).map((fecha) => { const x = azar('sd' + fecha)(); const s = Math.round(450 + x * 250); return { fecha, servicios: s, finalizados: Math.round(s * 0.84) }; });
+  const total = serie.reduce((a, x) => a + x.servicios, 0), fin = serie.reduce((a, x) => a + x.finalizados, 0);
+  const CLIENTES = [['Asisya', 0.2], ['Fixit', 0.17], ['Constructora Bolívar', 0.14], ['Auxilia', 0.1], ['Hisercol', 0.06]];
+  return {
+    ultimo_dia: hoyBogota(),
+    kpis: { servicios: total, servicios_ant: Math.round(total * 0.94), finalizados: fin, finalizados_ant: Math.round(fin * 0.95), cancelados: Math.round(total * 0.06),
+      cancelados_ant: Math.round(total * 0.07), clientes: 32, clientes_ant: 35, por_dia: Math.round(total / serie.length), por_dia_ant: Math.round(total * 0.94 / serie.length) },
+    serie,
+    por_cliente: CLIENTES.map(([cliente, t]) => ({ cliente, servicios: Math.round(total * t), servicios_ant: Math.round(total * t * 0.9), finalizados: Math.round(total * t * 0.85), cancelados: Math.round(total * t * 0.06), tasa_finalizados: 0.85 })),
+    por_tipo: [['Grúa', 0.3], ['Diligencia', 0.25], ['Asistencia jurídica', 0.15]].map(([tipo, t]) => ({ tipo, servicios: Math.round(total * t), servicios_ant: Math.round(total * t * 0.9) })),
+    por_estado: [['Finalizado', 0.84], ['Cancelado', 0.06], ['Pendiente', 0.06]].map(([estado, t]) => ({ estado, servicios: Math.round(total * t), servicios_ant: Math.round(total * t * 0.95) })),
+  };
+}
+demo.tablero_servicios_dias = serviciosDias;

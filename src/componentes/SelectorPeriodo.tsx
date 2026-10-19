@@ -5,14 +5,16 @@ import { useTransition } from 'react';
 import { PRESETS, type Preset, type Rango } from '@/lib/rango';
 
 // Cambia el periodo en la dirección (?p=…); la página se vuelve a pedir al servidor con ese periodo.
-export function SelectorPeriodo({ rango }: { rango: Rango }) {
+// fija: parámetros que la página necesita conservar al cambiar de periodo (p. ej. "vista=dias" en Servicios).
+export function SelectorPeriodo({ rango, fija }: { rango: Rango; fija?: string }) {
   const router = useRouter();
   const ruta = usePathname();
   const [cargando, iniciar] = useTransition();
 
   const ir = (preset: Preset, desde?: string, hasta?: string) => {
-    const q = preset === '28' ? '' : preset === 'otro' ? `?p=otro&desde=${desde}&hasta=${hasta}` : `?p=${preset}`;
-    iniciar(() => router.push(ruta + q, { scroll: false }));
+    const q = preset === '28' ? '' : preset === 'otro' ? `p=otro&desde=${desde}&hasta=${hasta}` : `p=${preset}`;
+    const todo = [fija, q].filter(Boolean).join('&');
+    iniciar(() => router.push(ruta + (todo ? '?' + todo : ''), { scroll: false }));
   };
 
   const cambiarFecha = (campo: 'desde' | 'hasta', valor: string) => {

@@ -4,6 +4,8 @@ const decimal1 = new Intl.NumberFormat('es-CO', { minimumFractionDigits: 1, maxi
 const diaMes = new Intl.DateTimeFormat('es-CO', { day: 'numeric', month: 'short', timeZone: 'UTC' });
 const diaMesAno = new Intl.DateTimeFormat('es-CO', { day: 'numeric', month: 'short', year: 'numeric', timeZone: 'UTC' });
 const diaSemana = new Intl.DateTimeFormat('es-CO', { weekday: 'short', day: 'numeric', month: 'short', timeZone: 'UTC' });
+const mesAnoCorto = new Intl.DateTimeFormat('es-CO', { month: 'short', year: '2-digit', timeZone: 'UTC' });
+const mesAnoLargo = new Intl.DateTimeFormat('es-CO', { month: 'long', year: 'numeric', timeZone: 'UTC' });
 
 type Numero = number | null | undefined;
 export const num = (v: Numero) => (v == null || Number.isNaN(v) ? '—' : entero.format(v));
@@ -15,6 +17,9 @@ const aFecha = (iso: string) => new Date(iso + 'T00:00:00Z');
 export const fechaCorta = (iso: string) => diaMes.format(aFecha(iso)).replace('.', '');
 export const fechaLarga = (iso: string) => diaMesAno.format(aFecha(iso)).replace('.', '');
 export const fechaConDia = (iso: string) => diaSemana.format(aFecha(iso)).replace(/\./g, '');
+// Meses (la fecha es el día 1 del mes): "oct 26" en el eje y "octubre de 2026" en el detalle.
+export const mesCorto = (iso: string) => mesAnoCorto.format(aFecha(iso.slice(0, 7) + '-01')).replace(/\./g, '').replace(' de ', ' ');
+export const mesLargo = (iso: string) => mesAnoLargo.format(aFecha(iso.slice(0, 7) + '-01'));
 
 export type Cambio = { texto: string; clase: '' | 'sube' | 'baja' } | null;
 
