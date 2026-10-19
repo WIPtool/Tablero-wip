@@ -344,3 +344,44 @@ function serviciosDias({ p_desde, p_hasta }) {
   };
 }
 demo.tablero_servicios_dias = serviciosDias;
+
+// Costos de marketing (ejemplo con los valores revisados el 19 de octubre de 2026).
+function costos(p) {
+  const trm = 3950;
+  const s = (id, plataforma, categoria, para_que, monto, moneda, cobro, estado, desde, extra = {}) => ({
+    id, plataforma, categoria, para_que, monto, moneda, cobro, estado, desde, hasta: null, nota: '', proximo_pago: null, ultimo_pago: null,
+    ultimo_pago_monto: null, ultimo_pago_estado: '', metodo_pago: '', suma_inversion: cobro === 'mensual' && estado !== 'prueba',
+    actualizado_por: 'ejemplo', actualizado: '2026-10-19T00:00:00Z', cop_mes: 0, gasto_mes: 0, ...extra,
+  });
+  const suscripciones = [
+    s(1, 'Brevo', 'Herramientas de marketing', 'Correos de nutrición y secuencias', 17, 'USD', 'mensual', 'activo', '2026-07-02',
+      { proximo_pago: '2026-11-07', ultimo_pago: '2026-10-07', ultimo_pago_monto: 17, ultimo_pago_estado: 'pagado', nota: 'Plan Starter · 10.000 correos al mes', cop_mes: 41100 }),
+    s(2, 'Kommo', 'CRM y WhatsApp', 'CRM y WhatsApp comercial', 45, 'USD', 'mensual', 'prueba', '2026-10-20',
+      { proximo_pago: '2026-10-20', nota: 'Prueba de Pro que vence el 20 de octubre.' }),
+    s(3, 'n8n', 'Automatización e IA', 'Flujos de Meli y del tablero', 27, 'USD', 'mensual', 'por_confirmar', '2026-10-13', { cop_mes: 24000, nota: 'Confirmar el valor en el portal de n8n.' }),
+    s(4, 'Claude API (Meli)', 'Automatización e IA', 'Meli y calificador', 0, 'USD', 'prepago', 'activo', '2026-09-01',
+      { gasto_mes: 63900, cop_mes: 63900, ultimo_pago: '2026-10-09', ultimo_pago_monto: 20, ultimo_pago_estado: 'pagado', nota: 'Saldo US$8,83 y recarga automática apagada.' }),
+    s(5, 'Explee', 'Prospección', 'Correos en frío', 0, 'USD', 'prepago', 'activo', '2026-09-01', { gasto_mes: 159337, cop_mes: 159337, nota: 'El saldo se agotó el 18 de octubre.' }),
+    s(6, 'Apollo.io', 'Prospección', 'Base de contactos', 59, 'USD', 'mensual', 'suspendido', '2026-07-03', { hasta: '2026-09-03', nota: 'Suspendido el 2 de octubre por pagos fallidos.' }),
+    s(7, 'WhatsApp Business (plataforma)', 'Operación de la plataforma', 'Notificaciones a clientes finales', 0, 'USD', 'consumo', 'activo', '2026-07-01', { gasto_mes: 58700, suma_inversion: false }),
+  ];
+  return {
+    mes: (p.p_mes || '2026-10-01').slice(0, 8) + '01', corte: '2026-10-19', trm, suscripciones,
+    gastos: [
+      { id: 1, plataforma: 'Claude API (Meli)', fecha: '2026-10-19', monto: 16.17, moneda: 'USD', concepto: 'Consumo del 1 al 19 de octubre', suma_inversion: true, cop: 63900 },
+      { id: 2, plataforma: 'WhatsApp Business (plataforma)', fecha: '2026-10-19', monto: 14.87, moneda: 'USD', concepto: 'Saldo de octubre por cobrar', suma_inversion: false, cop: 58700 },
+    ],
+    pagos: [
+      { id: 1, plataforma: 'Meta Ads', fecha: '2026-10-19', monto: 215208, moneda: 'COP', estado: 'pendiente', referencia: 'Saldo pendiente', nota: 'Límite de gasto alcanzado', cop: 215208 },
+      { id: 2, plataforma: 'Meta Ads', fecha: '2026-10-15', monto: 455038, moneda: 'COP', estado: 'pagado', referencia: 'W3X4B86HA4', nota: 'Mastercard •••• 5177', cop: 455038 },
+      { id: 3, plataforma: 'Meta Ads', fecha: '2026-10-08', monto: 455038, moneda: 'COP', estado: 'pagado', referencia: 'VDZVU6NGA4', nota: 'Mastercard •••• 5177', cop: 455038 },
+      { id: 4, plataforma: 'Claude Pro', fecha: '2026-10-16', monto: 20, moneda: 'USD', estado: 'pagado', referencia: '2984-0977-5007', nota: '', cop: 79000 },
+      { id: 5, plataforma: 'Brevo', fecha: '2026-10-07', monto: 17, moneda: 'USD', estado: 'pagado', referencia: 'SIB-6014875', nota: '', cop: 67150 },
+    ],
+    explee: { usd: 40.3, cop: 159337, enviados: 1340 },
+    pauta: { meta: 1492669, gads: 0 },
+    por_plataforma: [{ plataforma: 'Meta', cop: 1492669 }, { plataforma: 'Explee', cop: 159337 }, { plataforma: 'Claude API (Meli)', cop: 63900 }, { plataforma: 'Brevo', cop: 41100 }, { plataforma: 'n8n', cop: 24000 }],
+    total: 1781006, fuera_marketing: 58700,
+  };
+}
+demo.tablero_costos = costos;

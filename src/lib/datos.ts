@@ -51,6 +51,22 @@ export interface CostoFijo {
   id: number; plataforma: string; monto: number; moneda: 'COP' | 'USD'; desde: string; hasta: string | null; nota: string;
   actualizado_por: string; actualizado: string;
 }
+export type Cobro = 'mensual' | 'anual' | 'prepago' | 'consumo' | 'gratis';
+export type EstadoCosto = 'activo' | 'prueba' | 'suspendido' | 'por_confirmar';
+export interface Suscripcion extends CostoFijo {
+  categoria: string; para_que: string; cobro: Cobro; estado: EstadoCosto; proximo_pago: string | null; ultimo_pago: string | null;
+  ultimo_pago_monto: number | null; ultimo_pago_estado: string; metodo_pago: string; suma_inversion: boolean; cop_mes: number; gasto_mes: number;
+}
+export interface Gasto { id: number; plataforma: string; fecha: string; monto: number; moneda: 'COP' | 'USD'; concepto: string; suma_inversion: boolean; cop: number }
+export interface Pago {
+  id: number; plataforma: string; fecha: string; monto: number; moneda: 'COP' | 'USD'; estado: 'pagado' | 'pendiente' | 'fallido';
+  referencia: string; nota: string; cop: number;
+}
+export interface Costos {
+  mes: string; corte: string; trm: number | null; suscripciones: Suscripcion[]; gastos: Gasto[]; pagos: Pago[];
+  explee: { usd: number; cop: number; enviados: number }; pauta: { meta: number; gads: number };
+  por_plataforma: { plataforma: string; cop: number }[]; total: number; fuera_marketing: number;
+}
 
 export interface Email {
   kpis: Kpis;

@@ -18,7 +18,7 @@ export const PAGINAS: Pagina[] = [
   { id: 'prospeccion', titulo: 'Prospección', sub: 'Correos en frío de Explee: respuestas, leads calientes y costo' },
   { id: 'embudo', titulo: 'Embudo', sub: 'Oportunidades de Kommo por etapa y origen, y lo que cuesta cada reunión y cada cliente' },
   { id: 'agente', titulo: 'Agente de WhatsApp', sub: 'Conversaciones que atiende el agente con Claude: respuestas, traspasos a una persona y reuniones' },
-  { id: 'costos', titulo: 'Costos fijos', sub: 'Suscripciones que suman a la inversión (Brevo y demás)' },
+  { id: 'costos', titulo: 'Costos de marketing', sub: 'Licencias, consumo, pauta y pagos: todo lo que cuesta el marketing, mes a mes' },
   { id: 'links', titulo: 'Links de interés', sub: 'Accionadores que suman datos en Analytics y propuestas enviadas a clientes' },
   { id: 'servicios', titulo: 'Servicios', sub: 'Servicios que se crean cada mes en la plataforma WIP, en total y por cliente', seccion: 'operaciones' },
 ];
