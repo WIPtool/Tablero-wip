@@ -385,3 +385,33 @@ function costos(p) {
   };
 }
 demo.tablero_costos = costos;
+
+// WIP General (ejemplo con cifras parecidas a las reales de octubre de 2026).
+function general() {
+  const base = [15841, 16761, 18136, 22982, 18398, 15096, 18198, 14981, 17724, 8463];
+  const serie = Array.from({ length: 24 }, (_, i) => {
+    const d = new Date(Date.UTC(2024, 10 + i, 1)).toISOString().slice(0, 10);
+    const s = i >= 14 ? base[i - 14] : 16000 + Math.round(Math.sin(i) * 2500);
+    return { mes: d, servicios: s, activos: 26 + (i % 6), nuevos: i % 3, perdidos: (i + 1) % 3, reactivados: 0 };
+  });
+  return {
+    hoy: '2026-10-19', mes_actual: '2026-10-01', ultimo_mes: '2026-09-01', inicio: '2023-01-01', minimo: 20, margen: 0.8, ultimo_dia: '2026-10-18',
+    lista_clientes: ['FIXIT', 'ASISYA', 'Constructora Bolivar'], facturacion: [], serie,
+    hero: { ultimo: 17724, anterior: 14981, hace_un_ano: 21107, actual: 8463, proyeccion: 17490, record: 30423, record_mes: '2023-07-01' },
+    crecimiento: { mom: 0.183, cmgr3: 0.055, cmgr6: -0.004, cmgr12: -0.014, ttm: 217169, ttm_anterior: 208102, anual: 0.044, cagr: 0.057, cagr_desde: '2023-12-01' },
+    clientes: { activos: 31, activos_ant: 26, activos_hace_un_ano: 27, nuevos_3m: 11, perdidos_3m: 6, churn_ultimo: 0.077, churn_3m: 0.08, churn_12m: 0.097 },
+    retencion: { nrr: 0.652, grr: 0.399, clientes: 26, siguen: 16, logos: 0.615 },
+    quick_ratio: { nuevos: 631, expansion: 7036, contraccion: 4837, perdida: 202, ratio: 1.52 },
+    concentracion: { top1: 0.158, top1_cliente: 'FIXIT', top5: 0.558, top: [{ cliente: 'FIXIT', servicios: 9196, pct: 0.158 }, { cliente: 'ASISYA', servicios: 7775, pct: 0.133 }] },
+    cohortes: [
+      { trimestre: '2026-07-01', clientes: 11, retencion: { 1: 67 } },
+      { trimestre: '2026-01-01', clientes: 5, retencion: { 1: 80, 3: 40, 6: 20 } },
+      { trimestre: '2025-04-01', clientes: 4, retencion: { 1: 75, 3: 75, 6: 25, 12: 50 } },
+      { trimestre: '2024-07-01', clientes: 3, retencion: { 1: 33, 3: 33, 6: 67, 12: 33, 24: 33 } },
+    ],
+    embudo: { desde: '2026-09-01', etapas: [['Leads nuevos', 453], ['En conversación', 453], ['Reunión agendada', 30], ['Reunión hecha', 18], ['Propuesta enviada', 13], ['Decidió tomar WIP', 5]].map(([etapa, oportunidades]) => ({ etapa, oportunidades })) },
+    cac: { inversion_90: 5248239, clientes_90: 5, reuniones_90: 18, nuevos_plataforma_90: 12 },
+    ingresos: { meses_cargados: 0, mrr: null, mrr_ant: null, clientes_facturados: 0, nrr: null, serie: [] },
+  };
+}
+demo.tablero_general = general;

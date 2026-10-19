@@ -7,7 +7,7 @@ import { MODO_EJEMPLO } from '@/lib/config';
 export const metadata: Metadata = { title: 'Entrar' };
 
 export default async function Entrar({ searchParams }: { searchParams: Promise<{ error?: string }> }) {
-  if (MODO_EJEMPLO) redirect('/resumen');
+  if (MODO_EJEMPLO) redirect('/general');
   const { error } = await searchParams;
   return (
     <main className="grid min-h-full place-items-center bg-lateral p-6 text-lateral-tinta">

@@ -6,7 +6,7 @@ import { useState } from 'react';
 import { PAGINAS, PROXIMAS, SECCIONES, buscarPagina, seccionDe, type Pagina } from '@/lib/paginas';
 
 // Enlaces de la barra lateral. Conservan el periodo elegido (?p=…) al cambiar de página.
-// Arriba, el selector Marketing / Operaciones muestra solo las páginas de esa sección.
+// Arriba, el selector WIP General / Marketing / Operaciones muestra solo las páginas de esa sección.
 export function Navegacion({ pie }: { pie: React.ReactNode }) {
   const ruta = usePathname();
   const params = useSearchParams();
@@ -59,7 +59,7 @@ export function Navegacion({ pie }: { pie: React.ReactNode }) {
                 href={`/${s.inicio}${consulta ? '?' + consulta : ''}`}
                 onClick={() => setAbierto(false)}
                 aria-current={activa ? 'true' : undefined}
-                className={`rounded-[9px] px-2 py-1.5 text-center text-[13px] font-semibold no-underline transition-colors ${
+                className={`rounded-[9px] px-2 py-1.5 text-center text-[13px] font-semibold no-underline transition-colors ${s.id === 'general' ? 'col-span-2 ' : ''}${
                   activa ? 'bg-white/15 text-white' : 'text-lateral-suave hover:bg-white/5 hover:text-lateral-tinta'
                 }`}
               >

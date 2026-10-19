@@ -68,6 +68,24 @@ export interface Costos {
   por_plataforma: { plataforma: string; cop: number }[]; total: number; fuera_marketing: number;
 }
 
+export interface General {
+  hoy: string; mes_actual: string; ultimo_mes: string; inicio: string; minimo: number; margen: number; ultimo_dia: string | null;
+  lista_clientes: string[];
+  facturacion: { id: number; mes: string; cliente: string; valor: number; moneda: 'COP' | 'USD'; nota: string }[];
+  serie: { mes: string; servicios: number; activos: number; nuevos: number; perdidos: number; reactivados: number }[];
+  hero: { ultimo: number | null; anterior: number | null; hace_un_ano: number | null; actual: number | null; proyeccion: number | null; record: number | null; record_mes: string | null };
+  crecimiento: { mom: number | null; cmgr3: number | null; cmgr6: number | null; cmgr12: number | null; ttm: number | null; ttm_anterior: number | null; anual: number | null; cagr: number | null; cagr_desde: string };
+  clientes: { activos: number | null; activos_ant: number | null; activos_hace_un_ano: number | null; nuevos_3m: number | null; perdidos_3m: number | null;
+    churn_ultimo: number | null; churn_3m: number | null; churn_12m: number | null };
+  retencion: { nrr: number | null; grr: number | null; clientes: number; siguen: number; logos: number | null };
+  quick_ratio: { nuevos: number; expansion: number; contraccion: number; perdida: number; ratio: number | null };
+  concentracion: { top1: number | null; top1_cliente: string | null; top5: number | null; top: { cliente: string; servicios: number; pct: number }[] | null };
+  cohortes: { trimestre: string; clientes: number; retencion: Record<string, number> }[];
+  embudo: { desde: string; etapas: { etapa: string; oportunidades: number }[] };
+  cac: { inversion_90: number; clientes_90: number; reuniones_90: number; nuevos_plataforma_90: number };
+  ingresos: { meses_cargados: number; mrr: number | null; mrr_ant: number | null; clientes_facturados: number; nrr: number | null; serie: { mes: string; mrr: number }[] };
+}
+
 export interface Email {
   kpis: Kpis;
   serie: { fecha: string; enviados: number; aperturas: number; clics: number }[];

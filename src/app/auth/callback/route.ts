@@ -22,5 +22,5 @@ export async function GET(request: NextRequest) {
     await supabase.auth.signOut();
     return volver(`La cuenta ${email} no es de WIP. Entra con tu correo @wiptool.com`);
   }
-  return NextResponse.redirect(`${origin}/resumen`);
+  return NextResponse.redirect(`${origin}/general`);
 }
