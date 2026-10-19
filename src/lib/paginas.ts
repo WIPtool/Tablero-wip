@@ -1,7 +1,8 @@
 // Páginas del tablero, en secciones que se cambian con el selector de la barra lateral: WIP General (indicadores de la
 // empresa), Marketing (sitio, pauta, correo, embudo…) y Operaciones (uso de la plataforma WIP, con datos de su base MongoDB).
 export type Seccion = 'general' | 'marketing' | 'operaciones';
-export interface Pagina { id: string; titulo: string; sub: string; seccion?: Seccion; etapa?: string; puntos?: string[] }
+// menu: nombre en la barra lateral, si es distinto del título de la página.
+export interface Pagina { id: string; titulo: string; sub: string; seccion?: Seccion; etapa?: string; puntos?: string[]; menu?: string }
 
 export const SECCIONES: { id: Seccion; titulo: string; inicio: string }[] = [
   { id: 'general', titulo: 'WIP General', inicio: 'general' },
@@ -10,7 +11,7 @@ export const SECCIONES: { id: Seccion; titulo: string; inicio: string }[] = [
 ];
 
 export const PAGINAS: Pagina[] = [
-  { id: 'general', titulo: 'WIP General', sub: 'Servicios registrados, crecimiento, clientes, retención, embudo y unidad económica de WIP', seccion: 'general' },
+  { id: 'general', titulo: 'WIP General', menu: 'Indicadores', sub: 'Servicios registrados, crecimiento, clientes, retención, embudo y unidad económica de WIP', seccion: 'general' },
   { id: 'resumen', titulo: 'Resumen', sub: 'Visitas al sitio, conversiones y de dónde llegan' },
   { id: 'sitio', titulo: 'Sitio web', sub: 'Qué hace la gente en wiptool.com' },
   { id: 'seo', titulo: 'SEO sitio web', sub: 'Cómo nos encuentran en Google: wiptool.com' },
