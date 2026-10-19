@@ -53,16 +53,30 @@ begin
   meses as (select generate_series(inicio, actual, interval '1 month')::date mes),
   activos as (select cliente, mes, s from cm where s >= minimo),
   primero as (select cliente, min(mes) mes from activos group by 1),
+  -- Cada mes activo de cada cliente, con si estuvo activo el mes anterior y el siguiente (uniones, no subconsultas por mes:
+  -- con estas últimas la función pasaba del límite de tiempo de la API).
+  marcas as (
+    select a.cliente, a.mes, p.mes primer_mes, (ant.cliente is not null) antes, (sig.cliente is not null) despues
+    from activos a
+    join primero p on p.cliente = a.cliente
+    left join activos ant on ant.cliente = a.cliente and ant.mes = (a.mes - interval '1 month')::date
+    left join activos sig on sig.cliente = a.cliente and sig.mes = (a.mes + interval '1 month')::date
+  ),
+  por_mes as (
+    select mes, count(*) activos, count(*) filter (where mes = primer_mes) nuevos,
+           count(*) filter (where mes > primer_mes and not antes) reactivados
+    from marcas group by 1
+  ),
+  bajas as (
+    select (mes + interval '1 month')::date mes, count(*) perdidos from marcas where not despues group by 1
+  ),
   serie as (
-    select m.mes,
-           coalesce((select s from total_mes t where t.mes = m.mes), 0) servicios,
-           (select count(*) from activos a where a.mes = m.mes) activos,
-           (select count(*) from primero p where p.mes = m.mes) nuevos,
-           (select count(*) from activos a where a.mes = (m.mes - interval '1 month')::date
-              and not exists (select 1 from activos b where b.cliente = a.cliente and b.mes = m.mes)) perdidos,
-           (select count(*) from activos a join primero p on p.cliente = a.cliente where a.mes = m.mes and p.mes < m.mes
-              and not exists (select 1 from activos b where b.cliente = a.cliente and b.mes = (m.mes - interval '1 month')::date)) reactivados
+    select m.mes, coalesce(t.s, 0) servicios, coalesce(x.activos, 0) activos, coalesce(x.nuevos, 0) nuevos,
+           coalesce(b.perdidos, 0) perdidos, coalesce(x.reactivados, 0) reactivados
     from meses m
+    left join total_mes t on t.mes = m.mes
+    left join por_mes x on x.mes = m.mes
+    left join bajas b on b.mes = m.mes
   ),
   sm as (select mes, servicios s from serie),
   -- Servicios de un mes completo cualquiera.
@@ -109,14 +123,17 @@ begin
     select p.cliente, date_trunc('quarter', p.mes)::date trimestre, p.mes m0 from primero p
   ),
   -- % de los clientes de la cohorte que siguen activos k meses después de su primer mes (solo meses ya cerrados).
+  coh_k as (
+    select c.trimestre, kk.k, round(100.0 * count(a.cliente) / count(*)) pct
+    from coh c
+    cross join (values (1), (3), (6), (12), (24)) kk(k)
+    left join activos a on a.cliente = c.cliente and a.mes = (c.m0 + make_interval(months => kk.k))::date
+    where (c.m0 + make_interval(months => kk.k))::date <= ult
+    group by 1, 2
+  ),
   cohortes as (
     select c.trimestre, count(*) clientes,
-           (select jsonb_object_agg(z.k, z.pct) from (
-              select kk.k, round(100.0 * count(*) filter (where exists (select 1 from activos a where a.cliente = c2.cliente
-                                   and a.mes = (c2.m0 + make_interval(months => kk.k))::date)) / count(*)) pct
-              from coh c2, (values (1), (3), (6), (12), (24)) kk(k)
-              where c2.trimestre = c.trimestre and (c2.m0 + make_interval(months => kk.k))::date <= ult
-              group by kk.k) z) retencion
+           (select jsonb_object_agg(z.k, z.pct) from coh_k z where z.trimestre = c.trimestre) retencion
     from coh c
     group by c.trimestre
   ),
@@ -218,4 +235,7 @@ begin
   ) into r;
   return r;
 end $$;
+-- Corre con los permisos del dueño: las reglas de acceso fila por fila la hacían pasar de 8 s (el límite de la API) con
+-- la sesión del equipo. Sigue exigiendo una cuenta @wiptool.com al empezar (exigir_equipo).
+alter function tablero_general(int, numeric) security definer set search_path = public;
 revoke all on function tablero_general(int, numeric) from anon;
