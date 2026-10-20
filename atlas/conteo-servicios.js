@@ -60,8 +60,10 @@ async function enviar(desde, hasta, filas) {
 }
 
 exports = async function (desde, hasta) {
-  hasta = hasta || hoyColombia();
-  desde = desde || sumarDias(hasta, -(DIAS - 1));
+  // Cuando corre por horario, Atlas le pasa el evento del trigger como primer argumento: solo valen fechas en texto.
+  const esFecha = (v) => typeof v === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(v);
+  hasta = esFecha(hasta) ? hasta : hoyColombia();
+  desde = esFecha(desde) ? desde : sumarDias(hasta, -(DIAS - 1));
   const servicios = context.services.get('wipglobal-platform-prod').db('ServicesDB').collection('Service');
   const resumen = [];
   // Por meses, para que cada envío sea pequeño (el histórico desde 2023 son decenas de miles de filas).
