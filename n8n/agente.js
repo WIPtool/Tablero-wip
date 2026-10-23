@@ -192,8 +192,8 @@ const herramienta = {
         type: 'object', description: 'Lo que la persona dijo de su operación (vacío si no lo dijo).',
         properties: { nombre: { type: 'string' }, empresa: { type: 'string' }, pais: { type: 'string' }, tipo_operacion: { type: 'string' },
           equipo: { type: 'string', description: 'propio, red de terceros o ambos' }, herramienta_actual: { type: 'string' },
-          reto: { type: 'string' },
-          reto_correo: { type: 'string', description: 'El reto como frase corta en minúscula que complete "tu reto principal es ___", sin punto final. Ej.: "manejar todo por Excel y WhatsApp", "no tener visibilidad en tiempo real de tus servicios", "los errores y la pérdida de tiempo en las asignaciones".' },
+          reto: { type: 'string', description: 'Lo que la persona contó que le cuesta o quiere mejorar de su operación. Llénalo en cuanto lo diga, aunque no sea en el paso del reto, y repítelo en las respuestas siguientes.' },
+          reto_correo: { type: 'string', description: 'Siempre que haya reto: el reto como frase corta en minúscula que complete "tu reto principal es ___", sin punto final. Ej.: "manejar todo por Excel y WhatsApp", "no tener visibilidad en tiempo real de tus servicios", "los errores y la pérdida de tiempo en las asignaciones".' },
           servicios_mes: { type: 'string' }, correo: { type: 'string', description: 'El correo que la persona escribió, tal cual.' }, quiere_reunion: { type: 'boolean' } },
       },
     },
@@ -233,19 +233,23 @@ const correoCliente = String(d.correo || '').trim().toLowerCase();
 const contacto = ((lead._embedded && lead._embedded.contacts) || [])[0];
 // RETO_PRINCIPAL va dentro de frases de los correos ("tu reto principal es ___"): sin punto final y con un valor por defecto.
 const retoCorreo = String(d.reto_correo || '').trim().replace(/[.。]+$/, '') || 'tener el control de tus servicios en tiempo real';
+// Reto en Kommo apenas la persona lo cuenta (no solo cuando da el correo): el Retomador lo usa en la plantilla R y para elegir el
+// módulo de WIP de cada retome. Va la frase corta (reto_correo) porque cabe dentro de la plantilla; si no viene, el reto tal cual.
+const retoKommo = String(d.reto_correo || d.reto || '').trim().replace(/[.。]+$/, '').slice(0, 250);
+const retoActual = String(((lead.custom_fields_values || []).find((f) => f.field_id === CAMPO_RETO) || { values: [{}] }).values[0].value || '');
+const campoReto = retoKommo && retoKommo !== retoActual ? [{ field_id: CAMPO_RETO, values: [{ value: retoKommo }] }] : [];
 const atributos = Object.fromEntries(Object.entries({ NOMBRE: d.nombre, NOMBRE_EMPRESA: d.empresa, RETO_PRINCIPAL: retoCorreo })
   .filter(([, v]) => v && String(v).trim()).map(([k, v]) => [k, String(v).trim()]));
 const brevo = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(correoCliente) && !yaEnSecuencia ? {
   contacto: { email: correoCliente, attributes: atributos, listIds: [LISTA_INFO], updateEnabled: true },
-  lead: [{ id: ctx.lead_id, custom_fields_values: [{ field_id: CAMPO_SECUENCIA, values: [{ enum_id: ENUM_INFO }] },
-    ...(d.reto ? [{ field_id: CAMPO_RETO, values: [{ value: String(d.reto).slice(0, 250) }] }] : [])] }],
+  lead: [{ id: ctx.lead_id, custom_fields_values: [{ field_id: CAMPO_SECUENCIA, values: [{ enum_id: ENUM_INFO }] }] }],
   contacto_kommo: contacto ? [{ id: contacto.id, custom_fields_values: [{ field_code: 'EMAIL', values: [{ value: correoCliente, enum_code: 'WORK' }] }] }] : [],
   nota: [{ entity_id: ctx.lead_id, note_type: 'common', params: { text: `Meli consiguió el correo ${correoCliente} y la persona entró a la secuencia "Info solicitada" de Brevo.\nReto para los correos: ${retoCorreo}${datos ? '\n' + datos : ''}` } }],
 } : null;
 return [{ json: {
   brevo,
   lead_id: ctx.lead_id, texto, traspaso, responsable: ctx.responsable,
-  kommo: [{ id: ctx.lead_id, custom_fields_values: [{ field_id: CAMPO_RESPUESTA, values: [{ value: texto }] }],
+  kommo: [{ id: ctx.lead_id, custom_fields_values: [{ field_id: CAMPO_RESPUESTA, values: [{ value: texto }] }, ...campoReto],
     ...(traspaso ? { tags_to_add: [{ name: 'Atender persona' }] } : {}) }],
   bot: [{ bot_id: BOT_RESPUESTA, entity_id: ctx.lead_id, entity_type: 2 }],
   guardar: { lead_id: ctx.lead_id, rol: 'agente', texto, traspaso, momento: new Date().toISOString() },

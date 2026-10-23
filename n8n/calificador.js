@@ -1,5 +1,5 @@
 // n8n · F12 · Calificador: lee con Claude las conversaciones de WhatsApp que cambiaron y llena en Kommo sector, si encaja en el
-// perfil de cliente, calificación A/B/C, tipo de servicio, servicios al mes, operación, país y un resumen.
+// perfil de cliente, calificación A/B/C, tipo de servicio, reto, servicios al mes, operación, país y un resumen.
 // armar-flujo.cjs toma cada parte por su marca "// ==" y reemplaza __SUPABASE__.
 // Cada hora (8 a. m. a 8 p. m.): oportunidades con mensajes nuevos de la persona en las últimas 2 horas (agente_mensajes), en etapas
 // abiertas del embudo de ventas, hasta 15 por hora. El historial sale de agente_mensajes (lo que se guardó desde que existe el agente).
@@ -42,12 +42,13 @@ Fuera de perfil (encaja = "no"): domicilios, delivery, última milla, mensajerí
 Si la conversación no dice a qué se dedica la empresa, encaja = "por_confirmar".
 Calificación: A = encaja y mostró interés concreto (pidió precio, demo o información, dio su correo, contó volumen o equipo); B = encaja pero la conversación quedó al inicio; C = no encaja o no hay datos suficientes.
 tipo_servicio: frase corta en minúsculas que complete "los servicios de ___ de tu empresa" (por ejemplo "grúas", "mantenimiento de aires acondicionados", "internet"); vacío si no se sabe.
+reto: lo que la persona contó que le cuesta o quiere mejorar de su operación, como frase corta en minúscula que complete "tu reto principal es ___", sin punto final (por ejemplo "manejar todo por Excel y WhatsApp", "no tener visibilidad en tiempo real de tus servicios"); vacío si no lo dijo.
 Usa solo lo que dice la conversación; no inventes datos. Responde siempre llamando la herramienta calificar, sin texto adicional.`;
 return { json: { lead_id: yo.lead_id, pedido: {
   model: MODELO, max_tokens: 600, system: sistema,
   tools: [{ name: 'calificar', description: 'Guarda la calificación del lead', input_schema: { type: 'object', properties: {
     sector: { type: 'string', enum: SECTORES }, encaja: { type: 'string', enum: ['si', 'no', 'por_confirmar'] },
-    calificacion: { type: 'string', enum: ['A', 'B', 'C'] }, tipo_servicio: { type: 'string' },
+    calificacion: { type: 'string', enum: ['A', 'B', 'C'] }, tipo_servicio: { type: 'string' }, reto: { type: 'string' },
     servicios_mes: { type: ['integer', 'null'] }, operacion: { type: ['string', 'null'], enum: ['propio', 'terceros', 'ambos', null] },
     pais: { type: ['string', 'null'] }, resumen: { type: 'string', description: 'Una o dos frases: qué empresa es, qué necesita y en qué quedó.' },
   }, required: ['sector', 'encaja', 'calificacion', 'resumen'] } }],
@@ -61,7 +62,7 @@ const SECTOR = { 'Grúas': 454306, 'Asistencias': 454308, 'Salud y asistencia m�
   'Internet y telecomunicaciones': 454318, 'Limpieza': 454320, 'Funeraria': 454322, 'Servicio técnico': 454324, 'Transporte': 454326, 'Domicilios y mensajería': 454328,
   'Ventas y distribución': 454330, 'Taxis': 454332, 'Otro': 454334 };
 const ENCAJA = { si: 454336, no: 454338, por_confirmar: 454340 }, CALIFICACION = { A: 454342, B: 454344, C: 454346 }, OPERACION = { propio: 454348, terceros: 454350, ambos: 454352 };
-const CAMPO = { sector: 555776, encaja: 555778, calificacion: 555780, servicios: 555782, operacion: 555784, pais: 555786, resumen: 555788, calificado: 555790, tipo: 554680 };
+const CAMPO = { sector: 555776, encaja: 555778, calificacion: 555780, servicios: 555782, operacion: 555784, pais: 555786, resumen: 555788, calificado: 555790, tipo: 554680, reto: 537464 };
 const pedidos = $('Pedido a Claude (calificador)').all().map((i) => i.json);
 const respuestas = $input.all().map((i) => i.json);
 const salida = [];
@@ -74,6 +75,7 @@ const campos = [v(CAMPO.encaja, { enum_id: ENCAJA[uso.encaja] }), v(CAMPO.califi
   v(CAMPO.resumen, { value: String(uso.resumen || '').slice(0, 1000) }), v(CAMPO.calificado, { value: Math.floor(Date.now() / 1000) })];
 if (SECTOR[uso.sector]) campos.push(v(CAMPO.sector, { enum_id: SECTOR[uso.sector] }));
 if (uso.tipo_servicio) campos.push(v(CAMPO.tipo, { value: String(uso.tipo_servicio).toLowerCase().slice(0, 80) }));
+if (uso.reto) campos.push(v(CAMPO.reto, { value: String(uso.reto).trim().replace(/[.。]+$/, '').slice(0, 250) }));
 if (Number.isFinite(uso.servicios_mes)) campos.push(v(CAMPO.servicios, { value: uso.servicios_mes }));
 if (OPERACION[uso.operacion]) campos.push(v(CAMPO.operacion, { enum_id: OPERACION[uso.operacion] }));
 if (uso.pais) campos.push(v(CAMPO.pais, { value: String(uso.pais).slice(0, 60) }));

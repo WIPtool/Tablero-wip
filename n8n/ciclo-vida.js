@@ -3,8 +3,16 @@
 // Cada hora, de 8 a. m. a 8 p. m. (hora Colombia), revisa las oportunidades en "Sin respuesta (retomar)", "Reunión agendada" y
 // "Propuesta enviada":
 //  - Sin respuesta: si no encaja en el perfil o respondió "Ahora no" / "No, gracias", se cierra como Perdido (con motivo) y, si tiene
-//    correo, pasa a la nutrición de Brevo. Si encaja o está por confirmar: primer retome a los 7 días sin escribir, segundo a los 21
-//    (y al menos 7 días después del primero) y Perdido "Sin respuesta" a los 30 (y 7 días después del segundo).
+//    correo, pasa a la nutrición de Brevo. Solo se retoman los leads que encajan con calificación A o B (los "por confirmar" y C no
+//    reciben retomes). Cadencia: primer retome a los 7 días sin escribir, segundo 15 días después, y luego uno cada 30 días hasta
+//    completar 6; 30 días después del sexto, Perdido "Sin respuesta". Si la persona escribe después de un retome, el ciclo vuelve a
+//    empezar cuando se enfríe de nuevo.
+//    Cada retome habla de algo distinto de WIP y nunca repite una plantilla: si el lead tiene Reto, el primero lo menciona (R) y los
+//    siguientes recorren los módulos empezando por el que resuelve ese reto (por palabras clave, sin llamar a Claude); si no tiene,
+//    el primero es genérico (G). Mientras una plantilla no tenga Salesbot (null en BOTS), se usan las de antes (A o B) una sola vez y
+//    el resto espera.
+//  - Atender persona / Agente pausado en Sin respuesta: no se les envía plantilla; tarea para que alguien del equipo los retome
+//    (una vez cada 30 días).
 //  - Reunión agendada: a los 4 días en la etapa, tarea para confirmar si se hizo o reagendar; a los 11, si no ha escrito en 7 días,
 //    Perdido "No asistió a la reunión".
 //  - Propuesta enviada: a los 7 días en la etapa, tarea de seguimiento; a los 30, si no ha escrito en 30 días, Perdido "Sin respuesta".
@@ -41,7 +49,8 @@ for (let i = 0; i < contactos.length; i += 50) {
 return pedidos;
 
 // == Pedidos Supabase ciclo (Code, una vez para todos los elementos)
-// Cuándo entró cada oportunidad a su etapa (kommo_cambio_etapa) y quién respondió "Ahora no" / "No, gracias" a un retome.
+// Cuándo entró cada oportunidad a su etapa (kommo_cambio_etapa), quién respondió "Ahora no" / "No, gracias" a un retome y qué
+// plantillas se le enviaron a cada una (para no repetirlas).
 const SUPABASE = '__SUPABASE__';
 const leer = (j) => { if (j && typeof j.data === 'string') { try { return JSON.parse(j.data); } catch (e) { return {}; } } return j || {}; };
 const ids = $('Leads del ciclo').all().flatMap((i) => (leer(i.json)._embedded || {}).leads || []).map((l) => l.id);
@@ -51,17 +60,19 @@ const negativas = encodeURIComponent('(texto.ilike.*ahora no*,texto.ilike.*no, g
 return [
   { json: { url: `${SUPABASE}/rest/v1/kommo_cambio_etapa?select=lead_id,a_etapa,momento&lead_id=in.(${ids.join(',')})&order=momento.desc&limit=5000` } },
   { json: { url: `${SUPABASE}/rest/v1/agente_mensajes?select=lead_id,texto,momento&rol=eq.cliente&momento=gte.${desde}&or=${negativas}&limit=5000` } },
+  { json: { url: `${SUPABASE}/rest/v1/agente_mensajes?select=lead_id,texto,tipo&tipo=eq.plantilla&lead_id=in.(${ids.join(',')})&limit=5000` } },
 ];
 
 // == Armar ciclo (Code, una vez para todos los elementos)
 const EMBUDO = 14551307, SIN_RESPUESTA = 112730823, REUNION_AGENDADA = 112413255, PROPUESTA = 112730827, PERDIDO = 143;
 const MOTIVO = { sinRespuesta: 39246947, fueraDePerfil: 39246951, noInteresa: 39246955, noAsistio: 39246959 };
-const CAMPO = { tipo: 554680, encaja: 555778, calificacion: 555780, retomes: 555792, ultimoRetome: 555794 };
+const CAMPO = { tipo: 554680, encaja: 555778, calificacion: 555780, retomes: 555792, ultimoRetome: 555794, reto: 537464 };
 const ENCAJA = { 454336: 'si', 454338: 'no', 454340: 'por_confirmar' };
-const CALIFICACION_A = 454342;
-const BOTS = __BOTS_RETOME__; // { A, B, C, D, E }: Salesbot de cada plantilla (null si aún no existe)
+const CALIFICACION = { 454342: 'A', 454344: 'B', 454346: 'C' };
+const BOTS = __BOTS_RETOME__; // Salesbot de cada plantilla (null si aún no existe o no está aprobada)
 const LISTA_NUTRICION = 21;
 const MAX_RETOMES = 40; // por hora, para no enviar todo de una vez
+const TOPE_RETOMES = 6; // 7 días, +15 y luego cada 30 días
 const DIA = 86400, ahora = Math.floor(Date.now() / 1000);
 const leer = (j) => { if (j && typeof j.data === 'string') { try { return JSON.parse(j.data); } catch (e) { return {}; } } return j || {}; };
 const leads = $('Leads del ciclo').all().flatMap((i) => (leer(i.json)._embedded || {}).leads || []);
@@ -70,19 +81,48 @@ const eventos = kommo.flatMap((d) => (d._embedded && d._embedded.events) || []);
 const contactos = new Map(kommo.flatMap((d) => (d._embedded && d._embedded.contacts) || []).map((c) => [c.id, c]));
 const supa = $('Datos Supabase (ciclo)').all().map((i) => i.json).filter((r) => r && r.lead_id);
 const cambios = supa.filter((r) => r.a_etapa);
-const negativas = supa.filter((r) => r.texto);
+const negativas = supa.filter((r) => r.texto && !r.tipo);
+const plantillas = supa.filter((r) => r.tipo === 'plantilla');
 // Sin mensajes no se puede saber quién está callado: si la consulta a Kommo falló, no se toca nada.
 if (!eventos.length) return [];
 
 const campo = (l, id) => { const f = (l.custom_fields_values || []).find((x) => x.field_id === id); return f && f.values && f.values[0] ? f.values[0] : null; };
 const correoDe = (c) => ((c && c.custom_fields_values) || []).filter((f) => f.field_code === 'EMAIL').flatMap((f) => f.values || []).map((v) => String(v.value).trim()).find(Boolean) || '';
+const BOTONES = 'con botones Quiero verlo, Info a mi correo y Ahora no';
 const TEXTO = {
+  // Plantillas de antes (A y B se siguen usando mientras se aprueban las nuevas; C, D y E ya no se envían).
   A: (t) => `Hola ✋ Hace unos días hablamos de cómo organizar los servicios de ${t} de tu empresa. ¿Pudiste pensar en tomar WIP? En 30 minutos te mostramos cómo tu equipo recibe los servicios en el celular y tú ves en tiempo real dónde va cada uno, con fotos y firmas al cerrar. [Plantilla de WhatsApp para retomar la conversación, con botones Agendar reunión, Info a mi correo y Ahora no]`,
   B: (t) => `Hola ✋ Te escribimos de WIP. ¿Siguen manejando sus servicios de ${t} por Excel y WhatsApp? Con WIP asignas, sigues y cierras cada servicio desde una sola app, y ves en tiempo real lo que hace tu equipo en campo. ¿Te mostramos cómo funciona? [Plantilla de WhatsApp para retomar la conversación, con botones Agendar reunión, Info a mi correo y Ahora no]`,
-  C: () => 'Hola ✋ Hace unos días escribiste a WIP. ¿Tu empresa presta servicios en campo, como instalaciones, mantenimientos, asistencias, grúas o transporte? Si aún los manejan por Excel y WhatsApp, te mostramos cómo organizarlos con WIP. [Plantilla de WhatsApp para retomar la conversación, con botones Sí, cuéntame más y Ahora no]',
-  D: (t) => `Hola ✋ No queremos llenarte de mensajes, así que este es el último por ahora. Si en algún momento quieres organizar los servicios de ${t} de tu empresa sin Excel ni chats sueltos, en WIP te ayudamos. ¿Te contamos cómo funciona? [Plantilla de WhatsApp, último retome, con botones Agendar reunión, Info a mi correo y No, gracias]`,
-  E: () => 'Hola ✋ No queremos llenarte de mensajes, así que este es el último por ahora. Si tu empresa presta servicios en campo y quiere organizarlos sin Excel ni chats sueltos, en WIP te ayudamos. ¿Te contamos cómo funciona? [Plantilla de WhatsApp, último retome, con botones Sí, cuéntame más y No, gracias]',
+  // Plantillas nuevas: la marca "[Plantilla de retome X" al final es la que permite saber cuáles ya se enviaron.
+  R: (t, reto) => `Nos quedamos pensando en lo que nos contaste de tu operación: ${reto}. Eso es justo lo que resolvemos en WIP, y en 30 minutos te mostramos cómo quedaría en tu empresa. ¿Lo vemos? [Plantilla de retome R, ${BOTONES}]`,
+  G: () => `Desde WIP queremos retomar lo que hablamos. Ayudamos a empresas de servicios en campo a que su equipo reciba y cierre cada servicio en el celular, mientras ven en tiempo real cómo va cada uno. ¿Te mostramos cómo funcionaría en la tuya? [Plantilla de retome G, ${BOTONES}]`,
+  seguimiento: () => `¿Sabes en este momento dónde va cada persona de tu equipo? En WIP lo ves en un mapa, con la hora estimada de llegada a cada servicio, sin llamar a nadie. ¿Te mostramos cómo se ve? [Plantilla de retome seguimiento, ${BOTONES}]`,
+  asignacion: () => `Asignar un servicio en WIP toma segundos: ves quién está libre y más cerca, y el servicio le llega a su app con la dirección, los datos y lo que hay que hacer. ¿Te mostramos cómo funciona? [Plantilla de retome asignacion, ${BOTONES}]`,
+  evidencia: () => `Fotos, firma del cliente y formulario, todo desde el celular: así se cierra cada servicio en WIP, y el reporte queda listo al instante. Nada de fotos perdidas en el WhatsApp. ¿Quieres verlo? [Plantilla de retome evidencia, ${BOTONES}]`,
+  aviso_cliente: () => `Que tu cliente no tenga que llamar a preguntar: con WIP recibe por WhatsApp quién va, a qué hora llega y una encuesta al terminar. ¿Te contamos cómo se configura? [Plantilla de retome aviso_cliente, ${BOTONES}]`,
+  indicadores: () => `Un tablero con lo que pasa en tu operación: en WIP ves en vivo los servicios a tiempo, los atrasados y el rendimiento de cada técnico. ¿Te lo mostramos? [Plantilla de retome indicadores, ${BOTONES}]`,
+  tarifas: () => `Cierre de mes sin Excel: en WIP la tarifa y la liquidación de cada servicio se calculan solas, y los reportes para tus clientes salen con un clic. ¿Quieres verlo? [Plantilla de retome tarifas, ${BOTONES}]`,
 };
+// Cómo reconocer en agente_mensajes las plantillas de antes (no tenían marca).
+const ANTERIORES = [['A', 'Hola ✋ Hace unos días hablamos'], ['B', 'Hola ✋ Te escribimos de WIP'], ['C', 'Hola ✋ Hace unos días escribiste'], ['D', 'Hola ✋ No queremos llenarte']];
+const enviadasA = (id) => new Set(plantillas.filter((p) => Number(p.lead_id) === Number(id)).map((p) => {
+  const t = String(p.texto || '');
+  const marca = t.match(/\[Plantilla de retome (\w+)/);
+  if (marca) return marca[1];
+  const vieja = ANTERIORES.find(([, prefijo]) => t.startsWith(prefijo));
+  return vieja ? vieja[0] : null;
+}).filter(Boolean));
+// Módulo de WIP que resuelve el reto, por palabras clave (el primero que coincide).
+const MODULOS = ['seguimiento', 'asignacion', 'evidencia', 'aviso_cliente', 'indicadores', 'tarifas'];
+const CLAVES_RETO = [
+  ['seguimiento', /ubicaci|tiempo real|visibilidad|rastre|gps|d[oó]nde (va|est)|seguimiento|mapa|monitore/],
+  ['evidencia', /foto|firma|evidencia|acta|formulario|papel|soporte|informe/],
+  ['aviso_cliente', /cliente final|avis|notific|llaman|preguntan|a qu[eé] hora|comunicaci[oó]n con|encuesta|satisfacci/],
+  ['tarifas', /tarifa|factur|cobr|liquid|pago|costo|n[oó]mina|fin de mes/],
+  ['indicadores', /indicador|kpi|sla|productividad|rendimiento|medir|m[eé]trica|tiempos? de (respuesta|atenci)|cumplimiento/],
+  ['asignacion', /asign|despach|program|agend|disponib|ruta|coordin|excel|whatsapp|desorden|centraliz|papeleo/],
+];
+const moduloDe = (reto) => { const m = CLAVES_RETO.find(([, re]) => re.test(reto.toLowerCase())); return m ? m[0] : null; };
 
 const salida = { leads: [], notas: [], tareas: [], bots: [], filas: [], brevo: [], resumen: {} };
 const contar = (k) => { salida.resumen[k] = (salida.resumen[k] || 0) + 1; };
@@ -99,8 +139,9 @@ let retomes = 0;
 
 for (const l of leads) {
   if (l.pipeline_id !== EMBUDO) continue;
+  const etiquetas = ((l._embedded && l._embedded.tags) || []).map((t) => t.name);
   // "Atención manual": casos que lleva una persona (clientes en prueba, contactos conocidos, duplicados); el ciclo no los toca.
-  if (((l._embedded && l._embedded.tags) || []).some((t) => t.name === 'Atención manual')) continue;
+  if (etiquetas.includes('Atención manual')) continue;
   const contacto = ((l._embedded && l._embedded.contacts) || [])[0];
   const suyos = eventos.filter((e) => (e.entity_type === 'lead' && Number(e.entity_id) === Number(l.id))
     || (contacto && e.entity_type === 'contact' && Number(e.entity_id) === Number(contacto.id)));
@@ -116,30 +157,45 @@ for (const l of leads) {
 
   if (l.status_id === SIN_RESPUESTA) {
     const encaja = ENCAJA[(campo(l, CAMPO.encaja) || {}).enum_id] || 'por_confirmar';
+    const calificacion = CALIFICACION[(campo(l, CAMPO.calificacion) || {}).enum_id] || '';
     // "Ahora no" / "No, gracias" como último mensaje de la persona (después del último retome).
     const negativa = negativas.find((n) => Number(n.lead_id) === Number(l.id) && Math.abs(new Date(n.momento).getTime() / 1000 - ultEntrada) < 600);
     if (encaja === 'no') { cerrar(l, MOTIVO.fueraDePerfil, 'Cerrado por el ciclo automático: fuera del perfil de cliente de WIP' + (correo ? '. Sigue en la nutrición por correo.' : '.'), correo); contar('fuera_de_perfil'); continue; }
     if (negativa) { cerrar(l, MOTIVO.noInteresa, `Cerrado por el ciclo automático: respondió "${negativa.texto}" al retome` + (correo ? '. Sigue en la nutrición por correo.' : '.'), correo); contar('no_le_interesa'); continue; }
-    const hechos = Number((campo(l, CAMPO.retomes) || {}).value || 0);
     const desdeRetome = ultimoToque ? (ahora - ultimoToque) / DIA : Infinity;
-    if (hechos >= 2 && callado >= 30 && desdeRetome >= 7) { cerrar(l, MOTIVO.sinRespuesta, `Cerrado por el ciclo automático: no responde hace ${Math.floor(callado)} días después de 2 retomes.`, correo); contar('sin_respuesta'); continue; }
-    if (retomes >= MAX_RETOMES || callado < 1) continue;
-    const tipo = String((campo(l, CAMPO.tipo) || {}).value || '').trim();
-    let plantilla = null;
-    if (hechos === 0 && callado >= 7) plantilla = !tipo ? 'C' : ((campo(l, CAMPO.calificacion) || {}).enum_id === CALIFICACION_A ? 'A' : 'B');
-    else if (hechos === 1 && callado >= 21 && desdeRetome >= 7) plantilla = tipo ? 'D' : 'E';
-    // Si ya tuvo reunión o propuesta y no sabemos su servicio, las plantillas genéricas (C, E) no tienen sentido: tarea para retomarlo
-    // personalmente (una vez cada 21 días) en vez de mensaje automático.
-    const avanzado = cambios.some((c) => Number(c.lead_id) === Number(l.id) && [REUNION_AGENDADA, 112413259, PROPUESTA, 112413263].includes(Number(c.a_etapa)));
-    if (plantilla && avanzado && (plantilla === 'C' || plantilla === 'E')) {
-      if (desdeRetome >= 21) { tarea(l, 'Retomar personalmente: ya tuvo reunión o propuesta y está en Sin respuesta.'); contar('tarea_retomar_avanzado'); }
+    // Meli le pasó la conversación a una persona: la plantilla la despertaría y nadie le contestaría. Tarea en vez de mensaje.
+    if (etiquetas.includes('Atender persona') || etiquetas.includes('Agente pausado')) {
+      if (callado >= 7 && desdeRetome >= 30) { tarea(l, 'Retomar personalmente: está en Sin respuesta y Meli la había pasado a una persona (Atender persona).'); contar('tarea_atender_persona'); }
       continue;
     }
-    if (!plantilla || !BOTS[plantilla]) continue;
+    // Solo buenos leads: encajan en el perfil con calificación A o B.
+    if (encaja !== 'si' || !['A', 'B'].includes(calificacion)) { contar('sin_retome_no_calificado'); continue; }
+    // Si escribió después del último retome, el ciclo vuelve a empezar (las plantillas ya enviadas igual no se repiten).
+    const hechos = Number((campo(l, CAMPO.retomes) || {}).value || 0);
+    const paso = ultimoToque && ultEntrada > ultimoToque ? 0 : hechos;
+    if (paso >= TOPE_RETOMES && desdeRetome >= 30) { cerrar(l, MOTIVO.sinRespuesta, `Cerrado por el ciclo automático: no responde hace ${Math.floor(callado)} días después de ${paso} retomes.`, correo); contar('sin_respuesta'); continue; }
+    if (retomes >= MAX_RETOMES || callado < 7) continue;
+    const toca = paso === 0 || (paso === 1 && desdeRetome >= 15) || (paso >= 2 && paso < TOPE_RETOMES && desdeRetome >= 30);
+    if (!toca) continue;
+    const tipo = String((campo(l, CAMPO.tipo) || {}).value || '').trim();
+    const reto = String((campo(l, CAMPO.reto) || {}).value || '').trim().replace(/[.。]+$/, '');
+    const modulo = reto ? moduloDe(reto) : null;
+    const secuencia = [reto ? 'R' : 'G', ...(modulo ? [modulo, ...MODULOS.filter((m) => m !== modulo)] : MODULOS)];
+    const enviadas = enviadasA(l.id);
+    let plantilla = secuencia.find((k) => !enviadas.has(k) && BOTS[k]) || null;
+    // Mientras las nuevas no estén aprobadas: A o B una sola vez (A y B necesitan el tipo de servicio).
+    if (!plantilla && tipo && !enviadas.has('A') && !enviadas.has('B')) plantilla = BOTS[calificacion] ? calificacion : null;
+    if (!plantilla) { contar('retome_en_espera'); continue; }
+    // Si ya tuvo reunión o propuesta, el mensaje genérico no tiene sentido: tarea para retomarlo personalmente.
+    const avanzado = cambios.some((c) => Number(c.lead_id) === Number(l.id) && [REUNION_AGENDADA, 112413259, PROPUESTA, 112413263].includes(Number(c.a_etapa)));
+    if (avanzado && plantilla === 'G') {
+      if (desdeRetome >= 30) { tarea(l, 'Retomar personalmente: ya tuvo reunión o propuesta y está en Sin respuesta.'); contar('tarea_retomar_avanzado'); }
+      continue;
+    }
     retomes++;
     salida.bots.push({ bot_id: BOTS[plantilla], entity_id: l.id, entity_type: 2 });
-    salida.leads.push({ id: l.id, custom_fields_values: [{ field_id: CAMPO.retomes, values: [{ value: hechos + 1 }] }, { field_id: CAMPO.ultimoRetome, values: [{ value: ahora }] }] });
-    salida.filas.push({ lead_id: l.id, rol: 'agente', tipo: 'plantilla', texto: TEXTO[plantilla](tipo), momento: new Date().toISOString() });
+    salida.leads.push({ id: l.id, custom_fields_values: [{ field_id: CAMPO.retomes, values: [{ value: paso + 1 }] }, { field_id: CAMPO.ultimoRetome, values: [{ value: ahora }] }] });
+    salida.filas.push({ lead_id: l.id, rol: 'agente', tipo: 'plantilla', texto: TEXTO[plantilla](tipo, reto), momento: new Date().toISOString() });
     contar('retome_' + plantilla);
   } else if (l.status_id === REUNION_AGENDADA && enEtapa !== null) {
     if (enEtapa >= 11 && callado >= 7) { cerrar(l, MOTIVO.noAsistio, `Cerrado por el ciclo automático: ${Math.floor(enEtapa)} días en Reunión agendada sin pasar a Reunión hecha ni escribir.`, correo); contar('no_asistio'); }
