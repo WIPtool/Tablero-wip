@@ -285,9 +285,10 @@ const SINRESP = (() => {
 // Ciclo de vida del lead (ciclo-vida.js): Retomador y Depurador, cada hora sobre Sin respuesta, Reunión agendada y Propuesta enviada.
 // Salesbots de las plantillas de retome. De antes: A propuesta 9748, B inicial 9750 (se usan una vez mientras se aprueban las nuevas);
 // C calificar 9754, D y E último retome 9762/9764 ya no se envían. Nuevas (null hasta que Meta apruebe la plantilla y exista su
-// Salesbot): R menciona el Reto del lead, G genérica, y una por módulo de WIP.
-const BOTS_RETOME = { A: 18206, B: 18222, C: null, D: null, E: null, R: null, G: null,
-  seguimiento: null, asignacion: null, evidencia: null, aviso_cliente: null, indicadores: null, tarifas: null };
+// Salesbot): R menciona el Reto del lead (plantilla 16633), G genérica (16619), y una por módulo de WIP: seguimiento 16621,
+// asignacion 16623, evidencia 16625, aviso_cliente 16627, indicadores 16629, tarifas 16631.
+const BOTS_RETOME = { A: 18206, B: 18222, C: null, D: null, E: null, R: null, G: 23601,
+  seguimiento: 23603, asignacion: null, evidencia: 23605, aviso_cliente: null, indicadores: null, tarifas: null };
 const CICLO = (() => {
   const CV = partes('ciclo-vida.js');
   const id = (k) => `a1f0c0de-07${String(k).padStart(2, '0')}-4000-8000-0000000007${String(k).padStart(2, '0')}`;
