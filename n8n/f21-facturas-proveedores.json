@@ -128,14 +128,24 @@
             }
           ]
         },
-        "options": {}
+        "options": {
+          "batching": {
+            "batch": {
+              "batchSize": 3,
+              "batchInterval": 2000
+            }
+          }
+        }
       },
       "credentials": {
         "googleOAuth2Api": {
           "id": "jnLeMVYFho7CTP6Q",
           "name": "Google account"
         }
-      }
+      },
+      "retryOnFail": true,
+      "maxTries": 5,
+      "waitBetweenTries": 5000
     },
     {
       "id": "c4",
@@ -196,14 +206,24 @@
         "url": "=https://gmail.googleapis.com/gmail/v1/users/me/messages/{{ $json.id }}/attachments/{{ $json.adjunto }}",
         "authentication": "predefinedCredentialType",
         "nodeCredentialType": "googleOAuth2Api",
-        "options": {}
+        "options": {
+          "batching": {
+            "batch": {
+              "batchSize": 3,
+              "batchInterval": 2000
+            }
+          }
+        }
       },
       "credentials": {
         "googleOAuth2Api": {
           "id": "jnLeMVYFho7CTP6Q",
           "name": "Google account"
         }
-      }
+      },
+      "retryOnFail": true,
+      "maxTries": 5,
+      "waitBetweenTries": 5000
     },
     {
       "id": "d2",

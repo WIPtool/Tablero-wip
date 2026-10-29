@@ -100,6 +100,9 @@ return { json: { ...f, archivo, fila: { id: 'google-workspace:' + f.numero, prov
 
 const http = (id, name, x, y, extra) => ({ id, name, type: 'n8n-nodes-base.httpRequest', typeVersion: 4.2, position: [x, y], ...extra });
 const gmail = { authentication: 'predefinedCredentialType', nodeCredentialType: 'googleOAuth2Api' };
+// Gmail limita la cuota por minuto: las llamadas por correo van de a 3 cada 2 segundos y se reintentan si Gmail corta.
+const lotes = { batching: { batch: { batchSize: 3, batchInterval: 2000 } } };
+const reintentos = { retryOnFail: true, maxTries: 5, waitBetweenTries: 5000 };
 const supa = { authentication: 'genericCredentialType', genericAuthType: 'httpHeaderAuth' };
 const credG = { credentials: { googleOAuth2Api: CRED_GOOGLE } };
 const credS = { credentials: { httpHeaderAuth: CRED_SUPABASE } };
@@ -122,12 +125,12 @@ const nodos = [
   { id: 'c2', name: 'Un ítem por correo', type: 'n8n-nodes-base.code', typeVersion: 2, position: [660, 100],
     parameters: { jsCode: 'return $input.all().flatMap((i) => (i.json.messages || []).map((m) => ({ json: { id: m.id } })));' } },
   http('c3', 'Leer correo', 880, 100, { parameters: { url: '=' + GMAIL + '/{{ $json.id }}', ...gmail, sendQuery: true,
-    queryParameters: { parameters: [{ name: 'format', value: 'full' }] }, options: {} }, ...credG }),
+    queryParameters: { parameters: [{ name: 'format', value: 'full' }] }, options: lotes }, ...credG, ...reintentos }),
   { id: 'c4', name: 'Clasificar', type: 'n8n-nodes-base.code', typeVersion: 2, position: [1100, 100], parameters: { jsCode: clasificar.trim() } },
   { id: 'c5', name: '¿Es factura?', type: 'n8n-nodes-base.if', typeVersion: 2.2, position: [1320, 100],
     parameters: { conditions: { options: { caseSensitive: true, leftValue: '', typeValidation: 'strict', version: 2 }, combinator: 'and',
       conditions: [{ id: 'k1', leftValue: '={{ $json.tipo }}', rightValue: 'factura', operator: { type: 'string', operation: 'equals' } }] }, options: {} } },
-  http('d1', 'Bajar PDF', 1540, 0, { parameters: { url: '=' + GMAIL + '/{{ $json.id }}/attachments/{{ $json.adjunto }}', ...gmail, options: {} }, ...credG }),
+  http('d1', 'Bajar PDF', 1540, 0, { parameters: { url: '=' + GMAIL + '/{{ $json.id }}/attachments/{{ $json.adjunto }}', ...gmail, options: lotes }, ...credG, ...reintentos }),
   { id: 'd2', name: 'PDF a archivo', type: 'n8n-nodes-base.code', typeVersion: 2, position: [1760, 0],
     parameters: { jsCode: pdfArchivo.trim(), mode: 'runOnceForEachItem' } },
   { id: 'd3', name: 'Leer PDF', type: 'n8n-nodes-base.extractFromFile', typeVersion: 1, position: [1980, 0],
