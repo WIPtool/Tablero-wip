@@ -33,6 +33,9 @@ def supabase(clave, ruta, cuerpo, metodo='POST', extra=None):
 def handler(event, context):
     meses = int((event or {}).get('meses', 3))
     clave = json.loads(boto3.client('secretsmanager').get_secret_value(SecretId=SECRETO)['SecretString'])[CAMPO_CLAVE]
+    if (event or {}).get('firmar'):  # permisos de subida temporales (2 h) para rutas del bucket facturas
+        return {p: json.loads(supabase(clave, '/storage/v1/object/upload/sign/facturas/' + p, {}, extra={'x-upsert': 'true'})[1])['url']
+                for p in event['firmar']}
     cuenta = boto3.client('sts').get_caller_identity()['Account']
     inv = boto3.client('invoicing', region_name='us-east-1')
     try:

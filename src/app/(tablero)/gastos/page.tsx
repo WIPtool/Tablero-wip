@@ -22,7 +22,7 @@ const PROVEEDORES: Proveedor[] = [
   { id: 'aws', titulo: 'AWS', pagar: 'https://us-east-1.console.aws.amazon.com/billing/home#/paymentsdashboard', pagarTexto: 'Pagar en AWS',
     fuente: 'Facturas de la cuenta de AWS 329792044951, leídas con la API de facturación de AWS cada día a las 7 a. m. Cada factura es el consumo del mes anterior y se cobra a la tarjeta registrada el día que se emite. AWS no informa los pagos por API: para verlos o pagar a mano, usa el botón.' },
   { id: 'mongodb', titulo: 'MongoDB Atlas', pagar: 'https://cloud.mongodb.com/v2#/org/62f2bbc72834d50bd9515f12/billing/overview', pagarTexto: 'Pagar en Atlas', pagos: true, enlaceTexto: 'Ver en Atlas',
-    fuente: 'Facturas de la organización Aplicando en MongoDB Atlas, leídas con la API de Atlas cada día a las 7:15 a. m., con el estado de cada factura y de cada intento de cobro. Atlas no entrega el PDF por API: se guarda el detalle de cada factura en CSV, y el PDF se baja con «Ver en Atlas». La factura del mes en curso aparece cuando Atlas la cierra.' },
+    fuente: 'Facturas de la organización Aplicando en MongoDB Atlas, leídas con la API de Atlas cada día a las 7:15 a. m., con el estado de cada factura y de cada intento de cobro. Cada factura tiene su PDF y el detalle en CSV. Los PDF del histórico se trajeron una vez desde la web de Atlas; los nuevos llegan por correo a misha@wiptool.com. La factura del mes en curso aparece cuando Atlas la cierra.' },
 ];
 
 const dosDecimales = new Intl.NumberFormat('es-CO', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
@@ -77,7 +77,7 @@ async function Facturas({ prov }: { prov: Proveedor }) {
 
   // Enlaces firmados (1 hora) para ver y descargar cada PDF; solo el equipo puede pedirlos (reglas del bucket).
   const enlaces = new Map<string, string>();
-  const rutas = d.facturas.map((f) => f.archivo).filter(Boolean);
+  const rutas = d.facturas.flatMap((f) => [f.archivo, f.archivo_csv ?? '']).filter(Boolean);
   if (!MODO_EJEMPLO && rutas.length) {
     const { data } = await (await clienteServidor()).storage.from('facturas').createSignedUrls(rutas, 3600);
     for (const e of data ?? []) if (e.path && e.signedUrl) enlaces.set(e.path, e.signedUrl);
@@ -124,6 +124,7 @@ async function Facturas({ prov }: { prov: Proveedor }) {
               <tbody>
                 {d.facturas.length ? d.facturas.map((f) => {
                   const url = enlaces.get(f.archivo);
+                  const urlCsv = f.archivo_csv ? enlaces.get(f.archivo_csv) : undefined;
                   return (
                     <tr key={f.id} className="border-b border-reja last:border-0">
                       <td className={`${td} whitespace-nowrap`}>{fechaLarga(f.fecha)}</td>
@@ -138,14 +139,15 @@ async function Facturas({ prov }: { prov: Proveedor }) {
                       )}
                       <td className={`${td} whitespace-nowrap text-right`}>
                         <span className="inline-flex gap-1.5">
-                          {url && f.archivo.endsWith('.csv') ? (
-                            <a className={boton} href={`${url}&download=${encodeURIComponent(`${prov.titulo} ${f.periodo || f.numero}.csv`)}`}>Detalle CSV</a>
-                          ) : url ? (
+                          {url ? (
                             <>
                               <a className={boton} href={url} target="_blank" rel="noopener noreferrer">Ver</a>
-                              <a className={boton} href={`${url}&download=${encodeURIComponent(`${prov.titulo} ${f.numero}.pdf`)}`}>Descargar</a>
+                              <a className={boton} href={`${url}&download=${encodeURIComponent(`${prov.titulo} ${f.periodo || f.numero}.pdf`)}`}>Descargar</a>
                             </>
                           ) : <span className="text-tenue">PDF pendiente</span>}
+                          {urlCsv && (
+                            <a className={boton} href={`${urlCsv}&download=${encodeURIComponent(`${prov.titulo} ${f.periodo || f.numero}.csv`)}`}>Detalle CSV</a>
+                          )}
                           {f.correo_url && <a className={boton} href={f.correo_url} target="_blank" rel="noopener noreferrer">{prov.enlaceTexto ?? 'Correo'}</a>}
                         </span>
                       </td>

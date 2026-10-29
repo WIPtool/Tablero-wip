@@ -40,7 +40,7 @@ def handler(event, context):
             pedir(SUPABASE + '/storage/v1/object/facturas/' + arch, 'POST', csv, {'apikey': k, 'x-upsert': 'true', 'Content-Type': 'text/csv'})
             facturas.append({'id': 'mongodb:' + f['id'], 'proveedor': 'mongodb', 'cuenta': 'Aplicando', 'numero': f['id'],
                              'fecha': d['endDate'][:10], 'periodo': d['startDate'][:7], 'monto': (d.get('amountBilledCents') or 0) / 100,
-                             'moneda': 'USD', 'archivo': arch, 'correo_url': 'https://cloud.mongodb.com/v2#/org/%s/billing/invoice/%s' % (ORG, f['id']),
+                             'moneda': 'USD', 'archivo_csv': arch, 'correo_url': 'https://cloud.mongodb.com/v2#/org/%s/billing/invoice/%s' % (ORG, f['id']),
                              'estado': d.get('statusName', '')})
             for p in d.get('payments') or []:
                 e = p.get('statusName', '')
