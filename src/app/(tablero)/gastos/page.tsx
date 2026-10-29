@@ -15,14 +15,14 @@ export const metadata: Metadata = { title: 'Gastos' };
 //  - Google Workspace: flujo n8n F21 desde los correos de cobro de Google (trae pagos y cobros rechazados).
 //  - AWS: Lambda tablero-facturas-aws con la API Invoicing (solo facturas; AWS no informa pagos por API).
 //  - MongoDB Atlas: Lambda tablero-facturas-atlas con la API Admin v2 (estado, pagos y detalle en CSV; Atlas no da el PDF por API).
-interface Proveedor { id: string; titulo: string; pagar?: string; pagarTexto?: string; fuente?: string; pagos?: boolean; proximo?: boolean }
+interface Proveedor { id: string; titulo: string; pagar?: string; pagarTexto?: string; fuente?: string; pagos?: boolean; proximo?: boolean; enlaceTexto?: string }
 const PROVEEDORES: Proveedor[] = [
   { id: 'google-workspace', titulo: 'Google Workspace', pagar: 'https://admin.google.com/ac/billing/accounts', pagarTexto: 'Pagar en Google', pagos: true,
     fuente: 'Datos de los correos de cobro de Google que llegan a misha@wiptool.com; se revisan cada día a las 6:30 a. m. El total de cada factura se lee del PDF. El cobro es automático a la tarjeta registrada.' },
   { id: 'aws', titulo: 'AWS', pagar: 'https://us-east-1.console.aws.amazon.com/billing/home#/paymentsdashboard', pagarTexto: 'Pagar en AWS',
     fuente: 'Facturas de la cuenta de AWS 329792044951, leídas con la API de facturación de AWS cada día a las 7 a. m. Cada factura es el consumo del mes anterior y se cobra a la tarjeta registrada el día que se emite. AWS no informa los pagos por API: para verlos o pagar a mano, usa el botón.' },
-  { id: 'mongodb', titulo: 'MongoDB Atlas', pagar: 'https://cloud.mongodb.com/v2#/org/62f2bbc72834d50bd9515f12/billing/overview', pagarTexto: 'Pagar en Atlas', pagos: true,
-    fuente: 'Facturas de la organización Aplicando en MongoDB Atlas, leídas con la API de Atlas cada día a las 7:15 a. m., con el estado de cada factura y de cada intento de cobro. Atlas no entrega el PDF por API: se guarda el detalle de cada factura en CSV, y el PDF se baja desde la facturación de Atlas (botón de arriba).' },
+  { id: 'mongodb', titulo: 'MongoDB Atlas', pagar: 'https://cloud.mongodb.com/v2#/org/62f2bbc72834d50bd9515f12/billing/overview', pagarTexto: 'Pagar en Atlas', pagos: true, enlaceTexto: 'Ver en Atlas',
+    fuente: 'Facturas de la organización Aplicando en MongoDB Atlas, leídas con la API de Atlas cada día a las 7:15 a. m., con el estado de cada factura y de cada intento de cobro. Atlas no entrega el PDF por API: se guarda el detalle de cada factura en CSV, y el PDF se baja con «Ver en Atlas». La factura del mes en curso aparece cuando Atlas la cierra.' },
 ];
 
 const dosDecimales = new Intl.NumberFormat('es-CO', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
@@ -146,7 +146,7 @@ async function Facturas({ prov }: { prov: Proveedor }) {
                               <a className={boton} href={`${url}&download=${encodeURIComponent(`${prov.titulo} ${f.numero}.pdf`)}`}>Descargar</a>
                             </>
                           ) : <span className="text-tenue">PDF pendiente</span>}
-                          {f.correo_url && <a className={boton} href={f.correo_url} target="_blank" rel="noopener noreferrer">Correo</a>}
+                          {f.correo_url && <a className={boton} href={f.correo_url} target="_blank" rel="noopener noreferrer">{prov.enlaceTexto ?? 'Correo'}</a>}
                         </span>
                       </td>
                     </tr>

@@ -3,7 +3,7 @@ import { haceCuanto, horasDesde } from '@/lib/formato';
 
 const FUENTES: Record<string, string> = {
   ga4: 'Google Analytics', gsc: 'Search Console', meta: 'Meta Ads', gads: 'Google Ads', brevo: 'Brevo', explee: 'Explee', kommo: 'Kommo', trm: 'TRM',
-  plataforma: 'Plataforma WIP', workspace: 'Facturas Google',
+  plataforma: 'Plataforma WIP', workspace: 'Facturas Google', aws: 'Facturas AWS', mongodb: 'Facturas Atlas',
 };
 
 // Hace cuánto se cargó cada fuente. Verde: al día; ámbar: atrasada; rojo: la última carga falló.
@@ -19,7 +19,7 @@ export async function EstadoDatos() {
     <div className="flex flex-col gap-1">
       {cargas.map((c) => {
         const horas = horasDesde(c.actualizado);
-        const limite = ['gsc', 'gads', 'trm', 'plataforma', 'workspace'].includes(c.fuente) ? 30 : 3; // estas se cargan una vez al día
+        const limite = ['gsc', 'gads', 'trm', 'plataforma', 'workspace', 'aws', 'mongodb'].includes(c.fuente) ? 30 : 3; // estas se cargan una vez al día
         const color = c.estado === 'error' ? 'bg-malo' : horas > limite ? 'bg-aviso' : 'bg-bueno';
         const titulo = c.estado === 'error' ? `Error en la última carga: ${c.mensaje}` : `${c.filas} filas en la última carga`;
         return <Punto key={c.fuente} color={color} texto={`${FUENTES[c.fuente] ?? c.fuente} · ${haceCuanto(c.actualizado)}`} titulo={titulo} />;
