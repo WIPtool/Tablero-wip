@@ -158,3 +158,8 @@ export interface ServiciosDias {
   por_tipo: { tipo: string; servicios: number; servicios_ant: number }[];
   por_estado: { estado: string; servicios: number; servicios_ant: number }[];
 }
+
+// Operaciones › Gastos (supabase/027_facturas_proveedores.sql): una pestaña por proveedor.
+export interface FacturaProveedor { id: string; cuenta: string; numero: string; fecha: string; monto: number | null; moneda: string; archivo: string; correo_url: string }
+export interface MovimientoProveedor { fecha: string; cuenta: string; tipo: 'pago' | 'rechazo'; monto: number | null; moneda: string; detalle: string; correo_url: string }
+export interface Gastos { kpis: Kpis & { ultimo_pago: string | null; ultimo_rechazo: string | null }; facturas: FacturaProveedor[]; movimientos: MovimientoProveedor[] }

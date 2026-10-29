@@ -1,0 +1,603 @@
+{
+  "name": "F21 · Facturas de proveedores (Gmail → Supabase)",
+  "nodes": [
+    {
+      "id": "a1",
+      "name": "Cada día 6:30",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [
+        0,
+        0
+      ],
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "cronExpression",
+              "expression": "30 6 * * *"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "a2",
+      "name": "Cargar histórico (a mano)",
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [
+        0,
+        200
+      ],
+      "parameters": {}
+    },
+    {
+      "id": "b1",
+      "name": "Últimos 60 días",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        220,
+        0
+      ],
+      "parameters": {
+        "jsCode": "return [{ json: { q: \"from:payments-noreply@google.com subject:\\\"Google Workspace\\\" newer_than:60d\" } }];"
+      }
+    },
+    {
+      "id": "b2",
+      "name": "Todo el histórico",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        220,
+        200
+      ],
+      "parameters": {
+        "jsCode": "return [{ json: { q: \"from:payments-noreply@google.com subject:\\\"Google Workspace\\\"\" } }];"
+      }
+    },
+    {
+      "id": "c1",
+      "name": "Buscar correos",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        440,
+        100
+      ],
+      "parameters": {
+        "url": "https://gmail.googleapis.com/gmail/v1/users/me/messages",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "googleOAuth2Api",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "q",
+              "value": "={{ $json.q }}"
+            },
+            {
+              "name": "maxResults",
+              "value": "500"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "credentials": {
+        "googleOAuth2Api": {
+          "id": "jnLeMVYFho7CTP6Q",
+          "name": "Google account"
+        }
+      }
+    },
+    {
+      "id": "c2",
+      "name": "Un ítem por correo",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        660,
+        100
+      ],
+      "parameters": {
+        "jsCode": "return $input.all().flatMap((i) => (i.json.messages || []).map((m) => ({ json: { id: m.id } })));"
+      }
+    },
+    {
+      "id": "c3",
+      "name": "Leer correo",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        880,
+        100
+      ],
+      "parameters": {
+        "url": "=https://gmail.googleapis.com/gmail/v1/users/me/messages/{{ $json.id }}",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "googleOAuth2Api",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "format",
+              "value": "full"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "credentials": {
+        "googleOAuth2Api": {
+          "id": "jnLeMVYFho7CTP6Q",
+          "name": "Google account"
+        }
+      }
+    },
+    {
+      "id": "c4",
+      "name": "Clasificar",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1100,
+        100
+      ],
+      "parameters": {
+        "jsCode": "const texto = (p) => {\n  if (!p) return '';\n  if (p.mimeType === 'text/plain' && p.body && p.body.data) return Buffer.from(p.body.data, 'base64').toString('utf8');\n  for (const h of p.parts || []) { const t = texto(h); if (t) return t; }\n  return '';\n};\nconst adjuntos = (p, out = []) => {\n  if (!p) return out;\n  if (p.filename && /\\.pdf$/i.test(p.filename) && p.body && p.body.attachmentId) out.push({ nombre: p.filename, id: p.body.attachmentId });\n  for (const h of p.parts || []) adjuntos(h, out);\n  return out;\n};\nconst numero = (s) => {\n  s = String(s).replace(/[^\\d.,]/g, '');\n  const i = Math.max(s.lastIndexOf('.'), s.lastIndexOf(','));\n  if (i >= 0 && s.length - i - 1 === 2) return Number(s.slice(0, i).replace(/[.,]/g, '') + '.' + s.slice(i + 1));\n  return Number(s.replace(/[.,]/g, ''));\n};\nconst salida = [];\nfor (const it of $input.all()) {\n  const m = it.json;\n  const cab = Object.fromEntries((m.payload.headers || []).map((h) => [h.name.toLowerCase(), h.value]));\n  const asunto = cab.subject || '';\n  const cuerpo = texto(m.payload);\n  const fecha = new Date(Number(m.internalDate) - 5 * 3600e3).toISOString().slice(0, 10);\n  const cuenta = ((cuerpo.match(/ID de cliente de Google Workspace:\\s*([a-z0-9.-]+\\.[a-z]{2,})/i)\n    || cuerpo.match(/Dominio\\s+([a-z0-9.-]+\\.[a-z]{2,})/i)\n    || asunto.match(/([a-z0-9-]+(?:\\.[a-z0-9-]+)+)\\s*(?:está|$)/i)\n    || asunto.match(/(?:de|dominio)\\s+([a-z0-9-]+(?:\\.[a-z0-9-]+)+)/i) || [])[1] || '').toLowerCase();\n  const correo_url = 'https://mail.google.com/mail/u/?authuser=misha@wiptool.com#all/' + m.id;\n  const base = { id: m.id, proveedor: 'google-workspace', cuenta, fecha, correo_url, asunto };\n  if (/rechaz|declin/i.test(asunto)) {\n    const t = cuerpo.match(/(Visa|Mastercard|American Express|Amex|Discover)[^\\d]{0,20}(\\d{4})/i);\n    salida.push({ json: { ...base, tipo: 'rechazo', fila: { id: m.id, proveedor: base.proveedor, cuenta, fecha, tipo: 'rechazo', monto: null, moneda: 'USD',\n      detalle: t ? t[1] + ' ••' + t[2] : '', correo_url } } });\n  } else if (/recibimos el pago|se recibió el pago|payment received/i.test(asunto + ' ' + cuerpo.slice(0, 300))) {\n    const p = cuerpo.match(/pago de\\s+(USD|COP|EUR|US\\$)\\s?([\\d.,]+)/i) || cuerpo.match(/(USD|COP|EUR|US\\$)\\s?([\\d.,]+)/);\n    salida.push({ json: { ...base, tipo: 'pago', fila: { id: m.id, proveedor: base.proveedor, cuenta, fecha, tipo: 'pago',\n      monto: p ? numero(p[2]) : null, moneda: p ? p[1].replace('US$', 'USD').toUpperCase() : 'USD', detalle: '', correo_url } } });\n  } else if (/factura|invoice/i.test(asunto)) {\n    const pdf = adjuntos(m.payload)[0];\n    const n = (cuerpo.match(/N[úu]mero de factura\\s*:?\\s*(\\d+)/i) || (pdf ? pdf.nombre.match(/(\\d+)/) : null) || [])[1] || '';\n    if (!n || !pdf) continue; // sin número o sin PDF no hay qué guardar\n    salida.push({ json: { ...base, tipo: 'factura', numero: n, adjunto: pdf.id } });\n  }\n}\nreturn salida;"
+      }
+    },
+    {
+      "id": "c5",
+      "name": "¿Es factura?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        1320,
+        100
+      ],
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "combinator": "and",
+          "conditions": [
+            {
+              "id": "k1",
+              "leftValue": "={{ $json.tipo }}",
+              "rightValue": "factura",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              }
+            }
+          ]
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "d1",
+      "name": "Bajar PDF",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1540,
+        0
+      ],
+      "parameters": {
+        "url": "=https://gmail.googleapis.com/gmail/v1/users/me/messages/{{ $json.id }}/attachments/{{ $json.adjunto }}",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "googleOAuth2Api",
+        "options": {}
+      },
+      "credentials": {
+        "googleOAuth2Api": {
+          "id": "jnLeMVYFho7CTP6Q",
+          "name": "Google account"
+        }
+      }
+    },
+    {
+      "id": "d2",
+      "name": "PDF a archivo",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1760,
+        0
+      ],
+      "parameters": {
+        "jsCode": "const f = $('¿Es factura?').item.json;\nconst b64 = String($json.data || '').replace(/-/g, '+').replace(/_/g, '/');\nreturn { json: f, binary: { pdf: { data: b64, mimeType: 'application/pdf', fileName: f.numero + '.pdf', fileExtension: 'pdf' } } };",
+        "mode": "runOnceForEachItem"
+      }
+    },
+    {
+      "id": "d3",
+      "name": "Leer PDF",
+      "type": "n8n-nodes-base.extractFromFile",
+      "typeVersion": 1,
+      "position": [
+        1980,
+        0
+      ],
+      "parameters": {
+        "operation": "pdf",
+        "binaryPropertyName": "pdf",
+        "options": {}
+      }
+    },
+    {
+      "id": "d4",
+      "name": "Total de la factura",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2200,
+        0
+      ],
+      "parameters": {
+        "jsCode": "const f = $('PDF a archivo').item.json;\nconst bin = $('PDF a archivo').item.binary;\nconst t = String($json.text || '').replace(/ /g, ' ');\nconst numero = (s) => {\n  s = String(s).replace(/[^\\d.,]/g, '');\n  const i = Math.max(s.lastIndexOf('.'), s.lastIndexOf(','));\n  if (i >= 0 && s.length - i - 1 === 2) return Number(s.slice(0, i).replace(/[.,]/g, '') + '.' + s.slice(i + 1));\n  return Number(s.replace(/[.,]/g, ''));\n};\n// Montos con moneda (USD 73.70, US$ 73,70, $73.70, COP 250.000,00); el total es el que sigue a la palabra \"total\".\nconst re = /(USD|COP|EUR|US\\$|\\$)\\s?(\\d[\\d.,]*\\d)|(\\d[\\d.,]*\\d)\\s?(USD|COP|EUR)/g;\nlet total = null, moneda = 'USD', ultimo = null;\nfor (const linea of t.split(/\\n/)) {\n  const montos = [...linea.matchAll(re)].map((x) => ({ v: numero(x[2] || x[3]), m: (x[1] || x[4] || '').replace('US$', 'USD').replace('$', 'USD') }));\n  if (!montos.length) continue;\n  ultimo = montos[montos.length - 1];\n  if (/total/i.test(linea)) { total = montos[montos.length - 1].v; moneda = montos[montos.length - 1].m || moneda; }\n}\nif (total == null && ultimo) { total = ultimo.v; moneda = ultimo.m || moneda; }\nconst archivo = 'google-workspace/' + (f.cuenta || 'sin-cuenta') + '/' + f.numero + '.pdf';\nreturn { json: { ...f, archivo, fila: { id: 'google-workspace:' + f.numero, proveedor: 'google-workspace', cuenta: f.cuenta, numero: f.numero,\n  fecha: f.fecha, monto: Number.isFinite(total) ? total : null, moneda: moneda || 'USD', archivo, correo_url: f.correo_url },\n  texto_pdf: t.slice(0, 1500) }, binary: bin };",
+        "mode": "runOnceForEachItem"
+      }
+    },
+    {
+      "id": "d5",
+      "name": "Subir PDF a Supabase",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        2420,
+        0
+      ],
+      "parameters": {
+        "url": "=https://tlpnkcroqenudzgiqzum.supabase.co/storage/v1/object/facturas/{{ $json.archivo }}",
+        "method": "POST",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "x-upsert",
+              "value": "true"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/pdf"
+            }
+          ]
+        },
+        "sendBody": true,
+        "contentType": "binaryData",
+        "inputDataFieldName": "pdf",
+        "options": {}
+      },
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "LWRuov5D7s6ILPbQ",
+          "name": "Supabase (tablero)"
+        }
+      }
+    },
+    {
+      "id": "d6",
+      "name": "Fila de la factura",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2640,
+        0
+      ],
+      "parameters": {
+        "jsCode": "return { json: { fila: $('Total de la factura').item.json.fila } };",
+        "mode": "runOnceForEachItem"
+      }
+    },
+    {
+      "id": "d7",
+      "name": "Guardar factura",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        2860,
+        0
+      ],
+      "parameters": {
+        "url": "https://tlpnkcroqenudzgiqzum.supabase.co/rest/v1/proveedor_factura?on_conflict=id",
+        "method": "POST",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Prefer",
+              "value": "resolution=merge-duplicates,return=minimal"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify($json.fila) }}",
+        "options": {}
+      },
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "LWRuov5D7s6ILPbQ",
+          "name": "Supabase (tablero)"
+        }
+      }
+    },
+    {
+      "id": "e1",
+      "name": "Guardar pago o rechazo",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1540,
+        220
+      ],
+      "parameters": {
+        "url": "https://tlpnkcroqenudzgiqzum.supabase.co/rest/v1/proveedor_movimiento?on_conflict=id",
+        "method": "POST",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Prefer",
+              "value": "resolution=merge-duplicates,return=minimal"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify($json.fila) }}",
+        "options": {}
+      },
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "LWRuov5D7s6ILPbQ",
+          "name": "Supabase (tablero)"
+        }
+      }
+    },
+    {
+      "id": "f1",
+      "name": "Marcar carga",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        3080,
+        120
+      ],
+      "executeOnce": true,
+      "parameters": {
+        "url": "https://tlpnkcroqenudzgiqzum.supabase.co/rest/v1/rpc/registrar_carga",
+        "method": "POST",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ p_fuente: 'workspace', p_filas: $('Clasificar').all().length }) }}",
+        "options": {}
+      },
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "LWRuov5D7s6ILPbQ",
+          "name": "Supabase (tablero)"
+        }
+      }
+    }
+  ],
+  "connections": {
+    "Cada día 6:30": {
+      "main": [
+        [
+          {
+            "node": "Últimos 60 días",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Cargar histórico (a mano)": {
+      "main": [
+        [
+          {
+            "node": "Todo el histórico",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Últimos 60 días": {
+      "main": [
+        [
+          {
+            "node": "Buscar correos",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Todo el histórico": {
+      "main": [
+        [
+          {
+            "node": "Buscar correos",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Buscar correos": {
+      "main": [
+        [
+          {
+            "node": "Un ítem por correo",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Un ítem por correo": {
+      "main": [
+        [
+          {
+            "node": "Leer correo",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Leer correo": {
+      "main": [
+        [
+          {
+            "node": "Clasificar",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Clasificar": {
+      "main": [
+        [
+          {
+            "node": "¿Es factura?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "¿Es factura?": {
+      "main": [
+        [
+          {
+            "node": "Bajar PDF",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Guardar pago o rechazo",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Bajar PDF": {
+      "main": [
+        [
+          {
+            "node": "PDF a archivo",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "PDF a archivo": {
+      "main": [
+        [
+          {
+            "node": "Leer PDF",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Leer PDF": {
+      "main": [
+        [
+          {
+            "node": "Total de la factura",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Total de la factura": {
+      "main": [
+        [
+          {
+            "node": "Subir PDF a Supabase",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Subir PDF a Supabase": {
+      "main": [
+        [
+          {
+            "node": "Fila de la factura",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Fila de la factura": {
+      "main": [
+        [
+          {
+            "node": "Guardar factura",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Guardar factura": {
+      "main": [
+        [
+          {
+            "node": "Marcar carga",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Guardar pago o rechazo": {
+      "main": [
+        [
+          {
+            "node": "Marcar carga",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "timezone": "America/Bogota",
+    "errorWorkflow": "EnFP5wE2LSfxcvxi"
+  }
+}

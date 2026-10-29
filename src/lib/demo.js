@@ -415,3 +415,17 @@ function general() {
   };
 }
 demo.tablero_general = general;
+
+// Operaciones › Gastos (ejemplo).
+function gastos() {
+  const facturas = ['2026-10-02', '2026-09-01', '2026-08-01', '2026-07-01'].map((fecha, i) => ({
+    id: 'g' + i, cuenta: i ? 'asisteapp.co' : 'wiptool.com', numero: String(5703667524 - i * 1000), fecha, monto: 73.7, moneda: 'USD', archivo: '', correo_url: '#' }));
+  const movimientos = [
+    { fecha: '2026-10-01', cuenta: 'asisteapp.co', tipo: 'rechazo', monto: null, moneda: 'USD', detalle: 'Mastercard ••5177', correo_url: '#' },
+    { fecha: '2026-09-15', cuenta: 'asisteapp.co', tipo: 'rechazo', monto: null, moneda: 'USD', detalle: 'Mastercard ••5177', correo_url: '#' },
+    { fecha: '2026-08-03', cuenta: 'asisteapp.co', tipo: 'pago', monto: 73.7, moneda: 'USD', detalle: '', correo_url: '#' },
+  ];
+  return { kpis: { facturas: 4, facturado_12m: 294.8, pagado_12m: 221.1, ultimo_pago: '2026-08-03', ultimo_pago_monto: 73.7, rechazos_sin_pago: 2,
+    ultimo_rechazo: '2026-10-01', facturas_sin_pago: 2 }, facturas, movimientos };
+}
+demo.tablero_gastos = gastos;
