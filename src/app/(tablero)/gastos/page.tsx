@@ -14,19 +14,28 @@ export const metadata: Metadata = { title: 'Gastos' };
 // de una hora. Ningún proveedor deja pagar por API: el botón de pago abre la página de pagos de su consola.
 //  - Google Workspace: flujo n8n F21 desde los correos de cobro de Google (trae pagos y cobros rechazados).
 //  - AWS: Lambda tablero-facturas-aws con la API Invoicing (solo facturas; AWS no informa pagos por API).
+//  - MongoDB Atlas: Lambda tablero-facturas-atlas con la API Admin v2 (estado, pagos y detalle en CSV; Atlas no da el PDF por API).
 interface Proveedor { id: string; titulo: string; pagar?: string; pagarTexto?: string; fuente?: string; pagos?: boolean; proximo?: boolean }
 const PROVEEDORES: Proveedor[] = [
   { id: 'google-workspace', titulo: 'Google Workspace', pagar: 'https://admin.google.com/ac/billing/accounts', pagarTexto: 'Pagar en Google', pagos: true,
     fuente: 'Datos de los correos de cobro de Google que llegan a misha@wiptool.com; se revisan cada día a las 6:30 a. m. El total de cada factura se lee del PDF. El cobro es automático a la tarjeta registrada.' },
   { id: 'aws', titulo: 'AWS', pagar: 'https://us-east-1.console.aws.amazon.com/billing/home#/paymentsdashboard', pagarTexto: 'Pagar en AWS',
     fuente: 'Facturas de la cuenta de AWS 329792044951, leídas con la API de facturación de AWS cada día a las 7 a. m. Cada factura es el consumo del mes anterior y se cobra a la tarjeta registrada el día que se emite. AWS no informa los pagos por API: para verlos o pagar a mano, usa el botón.' },
-  { id: 'mongodb', titulo: 'MongoDB Atlas', proximo: true },
+  { id: 'mongodb', titulo: 'MongoDB Atlas', pagar: 'https://cloud.mongodb.com/v2#/org/62f2bbc72834d50bd9515f12/billing/overview', pagarTexto: 'Pagar en Atlas', pagos: true,
+    fuente: 'Facturas de la organización Aplicando en MongoDB Atlas, leídas con la API de Atlas cada día a las 7:15 a. m., con el estado de cada factura y de cada intento de cobro. Atlas no entrega el PDF por API: se guarda el detalle de cada factura en CSV, y el PDF se baja desde la facturación de Atlas (botón de arriba).' },
 ];
 
 const dosDecimales = new Intl.NumberFormat('es-CO', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 const dinero = (v: number | null | undefined, moneda = 'USD') =>
   v == null ? '—' : `${moneda === 'USD' ? 'US$' : moneda} ${dosDecimales.format(v)}`;
 const nombrePeriodo = (p: string) => (/^\d{4}-\d{2}$/.test(p) ? mesLargo(p + '-01') : p);
+// Estados de factura de Atlas.
+const ESTADOS: Record<string, { texto: string; clase: string }> = {
+  PAID: { texto: 'Pagada', clase: 'border-bueno/50 text-bueno' }, FAILED: { texto: 'Cobro fallido', clase: 'border-malo/50 text-malo' },
+  PENDING: { texto: 'En curso', clase: 'border-linea text-suave' }, CLOSED: { texto: 'Por cobrar', clase: 'border-aviso text-aviso' },
+  INVOICED: { texto: 'Facturada', clase: 'border-aviso text-aviso' }, FORGIVEN: { texto: 'Condonada', clase: 'border-linea text-suave' },
+  FREE: { texto: 'Sin costo', clase: 'border-linea text-suave' }, PREPAID: { texto: 'Prepagada', clase: 'border-linea text-suave' },
+};
 
 const chip = (activo: boolean) =>
   `rounded-full border px-3 py-1 text-[13px] font-medium no-underline ${activo ? 'border-navy bg-navy text-white dark:border-lima dark:bg-lima dark:text-navy' : 'border-linea text-tinta hover:border-tenue'}`;
@@ -63,6 +72,8 @@ async function Facturas({ prov }: { prov: Proveedor }) {
   const d = await pedir<Gastos>('tablero_gastos', { p_proveedor: prov.id });
   const k = d.kpis;
   const conPeriodo = d.facturas.some((f) => f.periodo);
+  const conEstado = d.facturas.some((f) => f.estado);
+  const columnas = 5 + (conPeriodo ? 1 : 0) + (conEstado ? 1 : 0);
 
   // Enlaces firmados (1 hora) para ver y descargar cada PDF; solo el equipo puede pedirlos (reglas del bucket).
   const enlaces = new Map<string, string>();
@@ -107,7 +118,7 @@ async function Facturas({ prov }: { prov: Proveedor }) {
               <thead>
                 <tr>
                   <th className={th}>Fecha</th>{conPeriodo && <th className={th}>Consumo de</th>}<th className={th}>Cuenta</th><th className={th}>Número</th>
-                  <th className={`${th} text-right`}>Total</th><th className={th}><span className="sr-only">Acciones</span></th>
+                  <th className={`${th} text-right`}>Total</th>{conEstado && <th className={th}>Estado</th>}<th className={th}><span className="sr-only">Acciones</span></th>
                 </tr>
               </thead>
               <tbody>
@@ -120,9 +131,16 @@ async function Facturas({ prov }: { prov: Proveedor }) {
                       <td className={td}>{f.cuenta}</td>
                       <td className={`${td} tabular-nums`}>{f.numero}</td>
                       <td className={`${td} whitespace-nowrap text-right tabular-nums`}>{dinero(f.monto, f.moneda)}</td>
+                      {conEstado && (
+                        <td className={td}>{f.estado && (
+                          <span className={`rounded-full border px-2 py-0.5 text-[12px] ${(ESTADOS[f.estado] ?? ESTADOS.PENDING).clase}`}>{ESTADOS[f.estado]?.texto ?? f.estado}</span>
+                        )}</td>
+                      )}
                       <td className={`${td} whitespace-nowrap text-right`}>
                         <span className="inline-flex gap-1.5">
-                          {url ? (
+                          {url && f.archivo.endsWith('.csv') ? (
+                            <a className={boton} href={`${url}&download=${encodeURIComponent(`${prov.titulo} ${f.periodo || f.numero}.csv`)}`}>Detalle CSV</a>
+                          ) : url ? (
                             <>
                               <a className={boton} href={url} target="_blank" rel="noopener noreferrer">Ver</a>
                               <a className={boton} href={`${url}&download=${encodeURIComponent(`${prov.titulo} ${f.numero}.pdf`)}`}>Descargar</a>
@@ -134,7 +152,7 @@ async function Facturas({ prov }: { prov: Proveedor }) {
                     </tr>
                   );
                 }) : (
-                  <tr><td colSpan={conPeriodo ? 6 : 5} className="px-2 py-5 text-center text-tenue">Aún no hay facturas cargadas.</td></tr>
+                  <tr><td colSpan={columnas} className="px-2 py-5 text-center text-tenue">Aún no hay facturas cargadas.</td></tr>
                 )}
               </tbody>
             </table>

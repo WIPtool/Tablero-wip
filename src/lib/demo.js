@@ -419,7 +419,7 @@ demo.tablero_general = general;
 // Operaciones › Gastos (ejemplo).
 function gastos() {
   const facturas = ['2026-10-02', '2026-09-01', '2026-08-01', '2026-07-01'].map((fecha, i) => ({
-    id: 'g' + i, cuenta: i ? 'asisteapp.co' : 'wiptool.com', numero: String(5703667524 - i * 1000), fecha, periodo: '', monto: 73.7, moneda: 'USD', archivo: '', correo_url: '#' }));
+    id: 'g' + i, cuenta: i ? 'asisteapp.co' : 'wiptool.com', numero: String(5703667524 - i * 1000), fecha, periodo: '', estado: '', monto: 73.7, moneda: 'USD', archivo: '', correo_url: '#' }));
   const movimientos = [
     { fecha: '2026-10-01', cuenta: 'asisteapp.co', tipo: 'rechazo', monto: null, moneda: 'USD', detalle: 'Mastercard ••5177', correo_url: '#' },
     { fecha: '2026-09-15', cuenta: 'asisteapp.co', tipo: 'rechazo', monto: null, moneda: 'USD', detalle: 'Mastercard ••5177', correo_url: '#' },
