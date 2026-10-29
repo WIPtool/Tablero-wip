@@ -2,6 +2,7 @@ import type { Metadata } from 'next';
 import Link from 'next/link';
 import { Encabezado, Tarjeta } from '@/componentes/Bloques';
 import { AccionesPendiente } from '@/componentes/AccionesPendiente';
+import { Plegable } from '@/componentes/Plegable';
 import { cambiarEstado } from './acciones';
 import { clienteServidor } from '@/lib/supabase/servidor';
 import { MODO_EJEMPLO } from '@/lib/config';
@@ -21,15 +22,23 @@ const PRIORIDAD: Record<string, { orden: number; texto: string; clase: string; b
   media: { orden: 1, texto: 'Media', clase: 'border-aviso text-aviso', borde: 'border-l-aviso' },
   baja: { orden: 2, texto: 'Baja', clase: 'border-linea text-suave', borde: 'border-l-linea' },
 };
+// Orden de las tarjetas (?orden=fecha): por prioridad (la de entrada) o solo por fecha de solicitud, de la más reciente a la más antigua.
+const ORDENES = [{ id: 'prioridad', texto: 'Prioridad' }, { id: 'fecha', texto: 'Fecha de solicitud' }] as const;
 const LIMITE = 200;
 const boton = 'rounded-lg border border-linea px-2.5 py-1 text-[12.5px] text-suave hover:border-tenue hover:text-tinta';
 const fechaHora = new Intl.DateTimeFormat('es-CO', { day: 'numeric', month: 'short', hour: 'numeric', minute: '2-digit', timeZone: 'America/Bogota' });
 const cuando = (iso: string) => fechaHora.format(new Date(iso)).replace(' de ', ' ');
+// Fecha de solicitud: la del correo; los pendientes sin correo usan la fecha en que se agregaron.
+const solicitud = (p: PendienteMisha) => p.fecha_correo ?? p.creado;
+const enlace = (ver: string, orden: string) => {
+  const q = [ver !== 'pendientes' && `ver=${ver}`, orden !== 'prioridad' && `orden=${orden}`].filter(Boolean).join('&');
+  return '/pendientes-misha' + (q ? '?' + q : '');
+};
 
 const chip = (activo: boolean) =>
   `rounded-full border px-3 py-1 text-[13px] font-medium no-underline ${activo ? 'border-navy bg-navy text-white dark:border-lima dark:bg-lima dark:text-navy' : 'border-linea text-tinta hover:border-tenue'}`;
 
-async function leerPendientes(estados: EstadoPendiente[]): Promise<{ lista: PendienteMisha[]; cuentas: Record<string, number> }> {
+async function leerPendientes(estados: EstadoPendiente[], porFecha: boolean): Promise<{ lista: PendienteMisha[]; cuentas: Record<string, number> }> {
   let lista: PendienteMisha[];
   let conEstado: { estado: string }[];
   if (MODO_EJEMPLO) {
@@ -63,8 +72,10 @@ async function leerPendientes(estados: EstadoPendiente[]): Promise<{ lista: Pend
   }
   const cuentas: Record<string, number> = {};
   for (const p of conEstado) cuentas[p.estado] = (cuentas[p.estado] ?? 0) + 1;
-  // sort es estable: quedan por prioridad y, dentro de cada una, del correo más reciente al más antiguo.
-  lista.sort((a, b) => (PRIORIDAD[a.prioridad]?.orden ?? 9) - (PRIORIDAD[b.prioridad]?.orden ?? 9));
+  // Por prioridad y, dentro de cada una, de la solicitud más reciente a la más antigua; o solo por fecha.
+  const porSolicitud = (a: PendienteMisha, b: PendienteMisha) => Date.parse(solicitud(b)) - Date.parse(solicitud(a));
+  lista.sort(porFecha ? porSolicitud
+    : (a, b) => (PRIORIDAD[a.prioridad]?.orden ?? 9) - (PRIORIDAD[b.prioridad]?.orden ?? 9) || porSolicitud(a, b));
   return { lista, cuentas };
 }
 
@@ -86,32 +97,38 @@ function Pendiente({ p }: { p: PendienteMisha }) {
       <header className="flex flex-col gap-1">
         <div className="flex flex-wrap items-center gap-2">
           <span className={`inline-block whitespace-nowrap rounded-full border px-2 py-0.5 text-[11.5px] font-semibold ${prioridad.clase}`}>{prioridad.texto}</span>
+          <time dateTime={solicitud(p)} title="Fecha de solicitud" className="whitespace-nowrap text-[12.5px] tabular-nums text-suave">{cuando(solicitud(p))}</time>
           {p.estado === 'accion' && <span className="inline-block whitespace-nowrap rounded-full border border-serie-1/50 px-2 py-0.5 text-[11.5px] font-semibold text-serie-1">Acción pedida</span>}
           <h2 className="min-w-0 text-base font-bold">{p.titulo}</h2>
         </div>
-        <div className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5 text-[12.5px] text-suave">
-          {p.remitente && <span className="min-w-0 truncate">{p.remitente}</span>}
-          {p.fecha_correo && <span className="tabular-nums text-tenue">{cuando(p.fecha_correo)}</span>}
-          {/^https:\/\//.test(p.correo_url) && (
-            <a href={p.correo_url} target="_blank" rel="noopener noreferrer" className="enlace-tabla">Abrir en Gmail</a>
-          )}
-        </div>
-      </header>
-      {p.resumen && <p className="max-w-[90ch] whitespace-pre-line text-[13px]">{p.resumen}</p>}
-      {p.instruccion && (
-        <div className="max-w-[90ch] rounded-[10px] bg-superficie-2 px-3 py-2 text-[13px]">
-          <div className="mb-0.5 flex flex-wrap items-baseline gap-2 text-[12px]">
-            <span className="font-medium text-suave">Instrucción para Claude</span>
-            <span className={p.instruccion_atendida ? 'text-bueno' : 'text-aviso'}>{p.instruccion_atendida ? 'Atendida' : 'Esperando a Claude'}</span>
+        {(p.remitente || /^https:\/\//.test(p.correo_url)) && (
+          <div className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5 text-[12.5px] text-suave">
+            {p.remitente && <span className="min-w-0 truncate">{p.remitente}</span>}
+            {/^https:\/\//.test(p.correo_url) && (
+              <a href={p.correo_url} target="_blank" rel="noopener noreferrer" className="enlace-tabla">Abrir en Gmail</a>
+            )}
           </div>
-          <p className="whitespace-pre-line">{p.instruccion}</p>
-        </div>
-      )}
-      {p.respuesta && (
-        <div className="max-w-[90ch] rounded-[10px] border border-l-4 border-linea border-l-lima-tinta px-3 py-2 text-[13px]">
-          <div className="mb-0.5 text-[12px] font-medium text-suave">Respuesta de Claude</div>
-          <p className="whitespace-pre-line">{p.respuesta}</p>
-        </div>
+        )}
+      </header>
+      {(p.resumen || p.instruccion || p.respuesta) && (
+        <Plegable id={`contenido-${p.id}`}>
+          {p.resumen && <p className="max-w-[90ch] whitespace-pre-line text-[13px]">{p.resumen}</p>}
+          {p.instruccion && (
+            <div className="max-w-[90ch] rounded-[10px] bg-superficie-2 px-3 py-2 text-[13px]">
+              <div className="mb-0.5 flex flex-wrap items-baseline gap-2 text-[12px]">
+                <span className="font-medium text-suave">Instrucción para Claude</span>
+                <span className={p.instruccion_atendida ? 'text-bueno' : 'text-aviso'}>{p.instruccion_atendida ? 'Atendida' : 'Esperando a Claude'}</span>
+              </div>
+              <p className="whitespace-pre-line">{p.instruccion}</p>
+            </div>
+          )}
+          {p.respuesta && (
+            <div className="max-w-[90ch] rounded-[10px] border border-l-4 border-linea border-l-lima-tinta px-3 py-2 text-[13px]">
+              <div className="mb-0.5 text-[12px] font-medium text-suave">Respuesta de Claude</div>
+              <p className="whitespace-pre-line">{p.respuesta}</p>
+            </div>
+          )}
+        </Plegable>
       )}
       {abierto ? (
         <AccionesPendiente id={p.id} instruccion={p.instruccion_atendida ? '' : p.instruccion}>
@@ -127,26 +144,42 @@ function Pendiente({ p }: { p: PendienteMisha }) {
   );
 }
 
-export default async function PaginaPendientesMisha({ searchParams }: { searchParams: Promise<{ ver?: string }> }) {
-  const { ver } = await searchParams;
+export default async function PaginaPendientesMisha({ searchParams }: { searchParams: Promise<{ ver?: string; orden?: string }> }) {
+  const { ver, orden: ordenPedido } = await searchParams;
   const vista = VISTAS.find((v) => v.id === ver) ?? VISTAS[0];
-  const { lista, cuentas } = await leerPendientes(vista.estados);
+  const orden = ORDENES.find((o) => o.id === ordenPedido) ?? ORDENES[0];
+  const { lista, cuentas } = await leerPendientes(vista.estados, orden.id === 'fecha');
 
   return (
     <>
       <div className="flex flex-col gap-3">
         <Encabezado pagina={buscarPagina('pendientes-misha')!} />
-        <nav aria-label="Filtro" className="flex flex-wrap gap-1.5">
-          {VISTAS.map((v) => {
-            const n = v.estados.reduce((s, e) => s + (cuentas[e] ?? 0), 0);
-            return (
-              <Link key={v.id} href={v.id === 'pendientes' ? '/pendientes-misha' : `/pendientes-misha?ver=${v.id}`}
-                aria-current={v.id === vista.id ? 'true' : undefined} className={chip(v.id === vista.id)}>
-                {v.titulo} <span className="tabular-nums opacity-70">{n}</span>
-              </Link>
-            );
-          })}
-        </nav>
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <nav aria-label="Filtro" className="flex flex-wrap gap-1.5">
+            {VISTAS.map((v) => {
+              const n = v.estados.reduce((s, e) => s + (cuentas[e] ?? 0), 0);
+              return (
+                <Link key={v.id} href={enlace(v.id, orden.id)}
+                  aria-current={v.id === vista.id ? 'true' : undefined} className={chip(v.id === vista.id)}>
+                  {v.titulo} <span className="tabular-nums opacity-70">{n}</span>
+                </Link>
+              );
+            })}
+          </nav>
+          <nav aria-label="Ordenar por" className="flex items-center gap-2">
+            <span className="text-[12.5px] text-suave">Ordenar por</span>
+            <div className="flex gap-0.5 rounded-[10px] border border-linea bg-superficie p-[3px]">
+              {ORDENES.map((o) => (
+                <Link key={o.id} href={enlace(vista.id, o.id)} aria-current={o.id === orden.id ? 'true' : undefined}
+                  className={`whitespace-nowrap rounded-[7px] px-2.5 py-1 text-[13px] font-medium no-underline transition-colors ${
+                    o.id === orden.id ? 'bg-tinta text-fondo' : 'text-suave hover:text-tinta'
+                  }`}>
+                  {o.texto}
+                </Link>
+              ))}
+            </div>
+          </nav>
+        </div>
       </div>
       {lista.length ? (
         <ul className="flex flex-col gap-3">
