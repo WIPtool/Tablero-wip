@@ -4,6 +4,10 @@
 # al bucket privado "facturas" de Supabase y guarda la fila en proveedor_factura. La clave de Supabase la toma del secreto
 # "tablero-wip" de Secrets Manager en cada corrida (no queda en el código ni en variables).
 #   Corrida normal: últimos 3 meses.  Histórico a mano: invocar con {"meses": 60}.
+# Despliegue: pila de CloudFormation "tablero-facturas-aws" (función + regla diaria + permiso) con este código en línea
+# (Code.ZipFile, archivo index.py, máx. 4.096 caracteres: se sube sin estas líneas de cabecera). Rol IAM aparte:
+# "tablero-facturas-aws" (invoicing:ListInvoiceSummaries/GetInvoicePDF, GetSecretValue del secreto tablero-wip y
+# AWSLambdaBasicExecutionRole). Para cambiar el código: UpdateStack con la plantilla o UpdateFunctionCode.
 import datetime
 import json
 import urllib.request
