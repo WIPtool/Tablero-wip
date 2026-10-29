@@ -22,6 +22,7 @@ export const PAGINAS: Pagina[] = [
   { id: 'embudo', titulo: 'Embudo', sub: 'Oportunidades de Kommo por etapa y origen, y lo que cuesta cada reunión y cada cliente' },
   { id: 'agente', titulo: 'Agente de WhatsApp', sub: 'Conversaciones que atiende el agente con Claude: respuestas, traspasos a una persona y reuniones' },
   { id: 'costos', titulo: 'Costos de marketing', sub: 'Licencias, consumo, pauta y pagos: todo lo que cuesta el marketing, mes a mes' },
+  { id: 'inversion', titulo: 'Inversión', sub: 'Facturas y cobros de la pauta y de las herramientas de marketing: Meta, Kommo, n8n, Brevo y más' },
   { id: 'links', titulo: 'Links de interés', sub: 'Accionadores que suman datos en Analytics y propuestas enviadas a clientes' },
   { id: 'servicios', titulo: 'Servicios', sub: 'Servicios que se crean cada mes en la plataforma WIP, en total y por cliente', seccion: 'operaciones' },
   { id: 'gastos', titulo: 'Gastos', sub: 'Facturas, pagos y cobros rechazados de los proveedores de la plataforma', seccion: 'operaciones' },

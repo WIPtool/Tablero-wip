@@ -1,0 +1,257 @@
+{
+  "name": "F22 · Cobros de Meta Ads (Graph API → Supabase)",
+  "nodes": [
+    {
+      "id": "a1",
+      "name": "Cada día 6:45",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [
+        0,
+        0
+      ],
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "cronExpression",
+              "expression": "45 6 * * *"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "a2",
+      "name": "Cargar histórico (a mano)",
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [
+        0,
+        200
+      ],
+      "parameters": {}
+    },
+    {
+      "id": "b1",
+      "name": "Últimos 60 días",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        220,
+        0
+      ],
+      "parameters": {
+        "jsCode": "const d = new Date(Date.now() - 60 * 86400e3).toISOString().slice(0, 10);\nreturn [{ json: { url: \"https://graph.facebook.com/v23.0/act_1212455492189816/activities?fields=event_type,event_time,extra_data&limit=500\" + '&since=' + d } }];"
+      }
+    },
+    {
+      "id": "b2",
+      "name": "Todo el histórico",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        220,
+        200
+      ],
+      "parameters": {
+        "jsCode": "const d = new Date(Date.now() - 3650 * 86400e3).toISOString().slice(0, 10);\nreturn [{ json: { url: \"https://graph.facebook.com/v23.0/act_1212455492189816/activities?fields=event_type,event_time,extra_data&limit=500\" + '&since=' + d } }];"
+      }
+    },
+    {
+      "id": "c1",
+      "name": "Actividad de la cuenta",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        440,
+        100
+      ],
+      "parameters": {
+        "url": "={{ $json.url }}",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "options": {
+          "pagination": {
+            "pagination": {
+              "paginationMode": "responseContainsNextURL",
+              "nextURL": "={{ $response.body.paging && $response.body.paging.next }}",
+              "paginationCompleteWhen": "other",
+              "completeExpression": "={{ !$response.body.paging || !$response.body.paging.next }}",
+              "limitPagesFetched": true,
+              "maxRequests": 60
+            }
+          }
+        }
+      },
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "mGflv9K19Myes2Fm",
+          "name": "Meta Ads (lectura)"
+        }
+      },
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 5000
+    },
+    {
+      "id": "c2",
+      "name": "Cobros",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        660,
+        100
+      ],
+      "parameters": {
+        "jsCode": "const filas = [];\nfor (const it of $input.all()) {\n  for (const a of (it.json.data || [])) {\n    if (a.event_type !== 'ad_account_billing_charge') continue;\n    let x = {};\n    try { x = JSON.parse(a.extra_data || '{}'); } catch (e) { continue; }\n    if (!x.transaction_id) continue;\n    filas.push({\n      id: 'meta:' + x.transaction_id, proveedor: 'meta', cuenta: 'Wip · act_1212455492189816', numero: x.transaction_id,\n      fecha: new Date(new Date(a.event_time).getTime() - 5 * 3600e3).toISOString().slice(0, 10), // hora de Colombia\n      monto: Number(x.new_value), moneda: (x.currency || 'COP').toUpperCase(), estado: 'PAID', periodo: '', archivo: '', correo_url: '',\n    });\n  }\n}\nreturn [{ json: { filas } }];"
+      }
+    },
+    {
+      "id": "c3",
+      "name": "Guardar cobros",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        880,
+        100
+      ],
+      "parameters": {
+        "url": "https://tlpnkcroqenudzgiqzum.supabase.co/rest/v1/proveedor_factura?on_conflict=id",
+        "method": "POST",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Prefer",
+              "value": "resolution=merge-duplicates,return=minimal"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify($json.filas) }}",
+        "options": {}
+      },
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "LWRuov5D7s6ILPbQ",
+          "name": "Supabase (tablero)"
+        }
+      }
+    },
+    {
+      "id": "c4",
+      "name": "Marcar carga",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1100,
+        100
+      ],
+      "executeOnce": true,
+      "parameters": {
+        "url": "https://tlpnkcroqenudzgiqzum.supabase.co/rest/v1/rpc/registrar_carga",
+        "method": "POST",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ p_fuente: 'meta-facturas', p_filas: $('Cobros').first().json.filas.length }) }}",
+        "options": {}
+      },
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "LWRuov5D7s6ILPbQ",
+          "name": "Supabase (tablero)"
+        }
+      }
+    }
+  ],
+  "connections": {
+    "Cada día 6:45": {
+      "main": [
+        [
+          {
+            "node": "Últimos 60 días",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Cargar histórico (a mano)": {
+      "main": [
+        [
+          {
+            "node": "Todo el histórico",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Últimos 60 días": {
+      "main": [
+        [
+          {
+            "node": "Actividad de la cuenta",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Todo el histórico": {
+      "main": [
+        [
+          {
+            "node": "Actividad de la cuenta",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Actividad de la cuenta": {
+      "main": [
+        [
+          {
+            "node": "Cobros",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Cobros": {
+      "main": [
+        [
+          {
+            "node": "Guardar cobros",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Guardar cobros": {
+      "main": [
+        [
+          {
+            "node": "Marcar carga",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "timezone": "America/Bogota",
+    "errorWorkflow": "EnFP5wE2LSfxcvxi"
+  }
+}
