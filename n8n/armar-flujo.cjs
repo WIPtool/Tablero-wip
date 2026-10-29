@@ -710,5 +710,5 @@ if (CRED_CALENDLY && BOT_DEMO_20) {
   fs.writeFileSync(path.join(__dirname, 'f19-recordatorio-demo.json'), JSON.stringify(f19, null, 2));
 }
 fs.writeFileSync(path.join(__dirname, 'f14-google-ads.json'), JSON.stringify(f14, null, 2));
-console.log('ok · webhook de Google Ads: https://wiptool.app.n8n.cloud/webhook/' + RUTA_GADS);
-console.log('ok · webhook de Brevo (F18): https://wiptool.app.n8n.cloud/webhook/' + RUTA_BREVO);
+console.log('ok · webhook de Google Ads: https://n8n.wiptool.com/webhook/' + RUTA_GADS);
+console.log('ok · webhook de Brevo (F18): https://n8n.wiptool.com/webhook/' + RUTA_BREVO);

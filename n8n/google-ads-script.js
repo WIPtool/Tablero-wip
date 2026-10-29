@@ -2,7 +2,7 @@
 // Se pega en Google Ads (cuenta Wip 609-428-5378): Herramientas > Acciones masivas > Secuencias de comandos.
 // Programarlo "Diariamente". Cada vez envía los últimos DIAS días por campaña a n8n (F14), que los guarda en Supabase.
 // Se reenvía año y medio completo cada día: son pocas filas y así el histórico queda cargado desde la primera ejecución.
-var WEBHOOK = 'https://wiptool.app.n8n.cloud/webhook/gads-7c1e4b9a2f6d48e3a51c';
+var WEBHOOK = 'https://n8n.wiptool.com/webhook/gads-7c1e4b9a2f6d48e3a51c';
 var DIAS = 540;
 
 function main() {
