@@ -112,6 +112,14 @@ export interface Propuesta {
   actualizado_por: string; actualizado: string;
 }
 
+export type Prioridad = 'alta' | 'media' | 'baja';
+export type EstadoPendiente = 'nuevo' | 'hecho' | 'descartado' | 'accion';
+export interface PendienteMisha {
+  id: number; titulo: string; resumen: string; remitente: string; correo_url: string; correo_id: string; fecha_correo: string | null;
+  prioridad: Prioridad; estado: EstadoPendiente; instruccion: string; respuesta: string; instruccion_atendida: boolean;
+  creado: string; actualizado: string;
+}
+
 export interface Embudo {
   kpis: Kpis;
   etapas: { etapa: string; tipo: string; oportunidades: number; valor: number }[];
