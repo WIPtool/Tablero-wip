@@ -12,7 +12,11 @@ export interface Proveedor {
   id: string; titulo: string; pagar?: string; pagarTexto?: string; fuente?: string; pagos?: boolean; proximo?: boolean;
   modo?: 'cobros';
   recibo?: (f: FacturaProveedor) => string; // enlace al recibo en la consola del proveedor
+  // Palabras de la pestaña: cobro/cobros, columna del número y botón del recibo (Meta: cobro, Transacción, Recibo PDF).
+  palabras?: { cobro: string; cobros: string; numero: string; recibo: string };
 }
+const PALABRAS = { cobro: 'cobro', cobros: 'cobros', numero: 'Transacción', recibo: 'Recibo PDF' };
+const mayuscula = (t: string) => t.charAt(0).toUpperCase() + t.slice(1);
 
 const dosDecimales = new Intl.NumberFormat('es-CO', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 const pesos = new Intl.NumberFormat('es-CO', { maximumFractionDigits: 0 });
@@ -53,6 +57,7 @@ export function PaginaProveedores({ paginaId, proveedores, prov: elegido }: { pa
 async function Cobros({ prov }: { prov: Proveedor }) {
   const d = await pedir<Gastos>('tablero_gastos', { p_proveedor: prov.id });
   const k = d.kpis;
+  const p = prov.palabras ?? PALABRAS;
   const moneda = d.facturas[0]?.moneda ?? 'COP';
   const hoy = hoyBogota();
   const hace12 = new Date(Date.parse(hoy) - 365 * 86400e3).toISOString().slice(0, 10);
@@ -69,11 +74,11 @@ async function Cobros({ prov }: { prov: Proveedor }) {
   const mayor = Math.max(1, ...[...porMes.values()].map((m) => m.total));
 
   const cifras: Cifra[] = [
-    { etiqueta: 'Último cobro', valor: k.ultima_factura_monto, anterior: k.penultima_factura_monto, formato: (v) => dinero(v, moneda), principal: true,
-      menorEsMejor: true, nota: k.ultima_factura ? fechaLarga(k.ultima_factura) : 'Sin cobros registrados' },
+    { etiqueta: `Último ${p.cobro}`, valor: k.ultima_factura_monto, anterior: k.penultima_factura_monto, formato: (v) => dinero(v, moneda), principal: true,
+      menorEsMejor: true, nota: k.ultima_factura ? fechaLarga(k.ultima_factura) : `Sin ${p.cobros} registrados` },
     { etiqueta: 'Cobrado en 12 meses', valor: k.facturado_12m, formato: (v) => dinero(v, moneda) },
     { etiqueta: 'Promedio por mes (12 meses)', valor: k.facturado_12m == null ? null : Number(k.facturado_12m) / 12, formato: (v) => dinero(v, moneda) },
-    { etiqueta: 'Cobros en 12 meses', valor: ultimos12.length, nota: `${k.facturas} desde el inicio` },
+    { etiqueta: `${mayuscula(p.cobros)} en 12 meses`, valor: ultimos12.length, nota: `${k.facturas} desde el inicio` },
   ];
 
   return (
@@ -97,12 +102,12 @@ async function Cobros({ prov }: { prov: Proveedor }) {
             </tbody>
           </table>
         </Tarjeta>
-        <Tarjeta titulo="Cobros y recibos" nota={`${d.facturas.length} cobros`} col={8}>
+        <Tarjeta titulo={`${mayuscula(p.cobros)} y ${prov.palabras ? 'facturas' : 'recibos'}`} nota={`${d.facturas.length} ${d.facturas.length === 1 ? p.cobro : p.cobros}`} col={8}>
           <div className="-mx-1 max-h-[560px] overflow-auto">
             <table className="w-full border-collapse text-[13px]">
               <thead className="sticky top-0 bg-superficie">
                 <tr>
-                  <th className={th}>Fecha</th><th className={th}>Cuenta</th><th className={th}>Transacción</th>
+                  <th className={th}>Fecha</th><th className={th}>Cuenta</th><th className={th}>{p.numero}</th>
                   <th className={`${th} text-right`}>Cobrado</th><th className={th}><span className="sr-only">Recibo</span></th>
                 </tr>
               </thead>
@@ -114,11 +119,11 @@ async function Cobros({ prov }: { prov: Proveedor }) {
                     <td className={`${td} tabular-nums text-suave`}>{f.numero}</td>
                     <td className={`${td} whitespace-nowrap text-right tabular-nums`}>{dinero(f.monto, f.moneda)}</td>
                     <td className={`${td} whitespace-nowrap text-right`}>
-                      {prov.recibo && <a className={boton} href={prov.recibo(f)} target="_blank" rel="noopener noreferrer">Recibo PDF</a>}
+                      {prov.recibo && <a className={boton} href={prov.recibo(f)} target="_blank" rel="noopener noreferrer">{p.recibo}</a>}
                     </td>
                   </tr>
                 )) : (
-                  <tr><td colSpan={5} className="px-2 py-5 text-center text-tenue">Aún no hay cobros cargados.</td></tr>
+                  <tr><td colSpan={5} className="px-2 py-5 text-center text-tenue">Aún no hay {p.cobros} cargados.</td></tr>
                 )}
               </tbody>
             </table>

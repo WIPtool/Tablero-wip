@@ -1,0 +1,339 @@
+{
+  "name": "F23 · Pedidos de Kommo (Gmail → Supabase)",
+  "nodes": [
+    {
+      "id": "a1",
+      "name": "Cada día 6:50",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [
+        0,
+        0
+      ],
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "cronExpression",
+              "expression": "50 6 * * *"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "a2",
+      "name": "Cargar histórico (a mano)",
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [
+        0,
+        200
+      ],
+      "parameters": {}
+    },
+    {
+      "id": "b1",
+      "name": "Últimos 60 días",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        220,
+        0
+      ],
+      "parameters": {
+        "jsCode": "return [{ json: { q: \"from:support@kommo.com subject:\\\"fue pagado\\\" newer_than:60d\" } }];"
+      }
+    },
+    {
+      "id": "b2",
+      "name": "Todo el histórico",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        220,
+        200
+      ],
+      "parameters": {
+        "jsCode": "return [{ json: { q: \"from:support@kommo.com subject:\\\"fue pagado\\\"\" } }];"
+      }
+    },
+    {
+      "id": "c1",
+      "name": "Buscar correos",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        440,
+        100
+      ],
+      "parameters": {
+        "url": "https://gmail.googleapis.com/gmail/v1/users/me/messages",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "googleOAuth2Api",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "q",
+              "value": "={{ $json.q }}"
+            },
+            {
+              "name": "maxResults",
+              "value": "500"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "credentials": {
+        "googleOAuth2Api": {
+          "id": "jnLeMVYFho7CTP6Q",
+          "name": "Google account"
+        }
+      },
+      "retryOnFail": true,
+      "maxTries": 5,
+      "waitBetweenTries": 5000
+    },
+    {
+      "id": "c2",
+      "name": "Un ítem por correo",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        660,
+        100
+      ],
+      "parameters": {
+        "jsCode": "return $input.all().flatMap((i) => (i.json.messages || []).map((m) => ({ json: { id: m.id } })));"
+      }
+    },
+    {
+      "id": "c3",
+      "name": "Leer asunto",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        880,
+        100
+      ],
+      "parameters": {
+        "url": "=https://gmail.googleapis.com/gmail/v1/users/me/messages/{{ $json.id }}",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "googleOAuth2Api",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "format",
+              "value": "metadata"
+            },
+            {
+              "name": "metadataHeaders",
+              "value": "Subject"
+            }
+          ]
+        },
+        "options": {
+          "batching": {
+            "batch": {
+              "batchSize": 3,
+              "batchInterval": 2000
+            }
+          }
+        }
+      },
+      "credentials": {
+        "googleOAuth2Api": {
+          "id": "jnLeMVYFho7CTP6Q",
+          "name": "Google account"
+        }
+      },
+      "retryOnFail": true,
+      "maxTries": 5,
+      "waitBetweenTries": 5000
+    },
+    {
+      "id": "c4",
+      "name": "Pedidos",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1100,
+        100
+      ],
+      "parameters": {
+        "jsCode": "const filas = [];\nfor (const it of $input.all()) {\n  const m = it.json;\n  const asunto = ((m.payload && m.payload.headers) || []).find((h) => h.name.toLowerCase() === 'subject');\n  const n = ((asunto && asunto.value) || '').match(/pedido\\s+#?(\\d+)/i);\n  if (!n) continue;\n  filas.push({\n    id: 'kommo:' + n[1], proveedor: 'kommo', cuenta: 'wiptool.kommo.com', numero: n[1],\n    fecha: new Date(Number(m.internalDate) - 5 * 3600e3).toISOString().slice(0, 10), // hora de Colombia\n    moneda: 'USD', estado: 'PAID', periodo: '', archivo: '',\n    correo_url: 'https://mail.google.com/mail/u/?authuser=misha@wiptool.com#all/' + m.id,\n  });\n}\nreturn [{ json: { filas } }];"
+      }
+    },
+    {
+      "id": "c5",
+      "name": "Guardar pedidos",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1320,
+        100
+      ],
+      "parameters": {
+        "url": "https://tlpnkcroqenudzgiqzum.supabase.co/rest/v1/proveedor_factura?on_conflict=id",
+        "method": "POST",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Prefer",
+              "value": "resolution=merge-duplicates,return=minimal"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify($json.filas) }}",
+        "options": {}
+      },
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "LWRuov5D7s6ILPbQ",
+          "name": "Supabase (tablero)"
+        }
+      }
+    },
+    {
+      "id": "c6",
+      "name": "Marcar carga",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1540,
+        100
+      ],
+      "executeOnce": true,
+      "parameters": {
+        "url": "https://tlpnkcroqenudzgiqzum.supabase.co/rest/v1/rpc/registrar_carga",
+        "method": "POST",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ p_fuente: 'kommo-facturas', p_filas: $('Pedidos').first().json.filas.length }) }}",
+        "options": {}
+      },
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "LWRuov5D7s6ILPbQ",
+          "name": "Supabase (tablero)"
+        }
+      }
+    }
+  ],
+  "connections": {
+    "Cada día 6:50": {
+      "main": [
+        [
+          {
+            "node": "Últimos 60 días",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Cargar histórico (a mano)": {
+      "main": [
+        [
+          {
+            "node": "Todo el histórico",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Últimos 60 días": {
+      "main": [
+        [
+          {
+            "node": "Buscar correos",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Todo el histórico": {
+      "main": [
+        [
+          {
+            "node": "Buscar correos",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Buscar correos": {
+      "main": [
+        [
+          {
+            "node": "Un ítem por correo",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Un ítem por correo": {
+      "main": [
+        [
+          {
+            "node": "Leer asunto",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Leer asunto": {
+      "main": [
+        [
+          {
+            "node": "Pedidos",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Pedidos": {
+      "main": [
+        [
+          {
+            "node": "Guardar pedidos",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Guardar pedidos": {
+      "main": [
+        [
+          {
+            "node": "Marcar carga",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "timezone": "America/Bogota",
+    "errorWorkflow": "EnFP5wE2LSfxcvxi"
+  }
+}
