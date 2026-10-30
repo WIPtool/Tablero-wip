@@ -15,8 +15,9 @@ export interface Proveedor {
   modo?: 'cobros';
   recibo?: (f: FacturaProveedor) => string; // enlace al recibo en la consola del proveedor
   // Palabras de la pestaña: cobro/cobros, columna del número, botón del recibo, cifra principal y título de la tabla
-  // (Meta: cobro, Transacción, Recibo PDF, «Último cobro», «Cobros y recibos»).
-  palabras?: { cobro: string; cobros: string; numero: string; recibo: string; ultimo?: string; tabla?: string };
+  // (Meta: cobro, Transacción, Recibo PDF, «Último cobro», «Cobros y recibos»). «enlace»: texto del botón cuando no hay PDF
+  // guardado y el botón lleva a la consola del proveedor (si no se da, se usa «recibo»).
+  palabras?: { cobro: string; cobros: string; numero: string; recibo: string; ultimo?: string; tabla?: string; enlace?: string };
 }
 const PALABRAS = { cobro: 'cobro', cobros: 'cobros', numero: 'Transacción', recibo: 'Recibo PDF' };
 const mayuscula = (t: string) => t.charAt(0).toUpperCase() + t.slice(1);
@@ -132,7 +133,7 @@ async function Cobros({ prov }: { prov: Proveedor }) {
                   <tr key={f.id} className="border-b border-reja last:border-0">
                     <td className={`${td} whitespace-nowrap`}>{fechaLarga(f.fecha)}</td>
                     <td className={td}>{f.cuenta}</td>
-                    <td className={`${td} tabular-nums text-suave`}>{f.numero}</td>
+                    <td className={`${td} tabular-nums text-suave`}>{f.numero || '—'}</td>
                     <td className={`${td} whitespace-nowrap text-right tabular-nums`}>
                       {NO_COBRADA[f.estado] ? (
                         <><span className="mr-1.5 rounded-full border border-linea px-2 py-0.5 text-[11.5px] text-suave">{NO_COBRADA[f.estado]}</span>
@@ -142,7 +143,7 @@ async function Cobros({ prov }: { prov: Proveedor }) {
                     <td className={`${td} whitespace-nowrap text-right`}>
                       {enlaces.get(f.archivo)
                         ? <a className={boton} href={enlaces.get(f.archivo)} target="_blank" rel="noopener noreferrer">{p.recibo}</a>
-                        : prov.recibo && <a className={boton} href={prov.recibo(f)} target="_blank" rel="noopener noreferrer">{p.recibo}</a>}
+                        : prov.recibo && <a className={boton} href={prov.recibo(f)} target="_blank" rel="noopener noreferrer">{p.enlace ?? p.recibo}</a>}
                     </td>
                   </tr>
                 )) : (

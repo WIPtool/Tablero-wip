@@ -1,0 +1,198 @@
+{
+  "name": "F25 · Recargas de Explee (API → Supabase)",
+  "nodes": [
+    {
+      "id": "a1",
+      "name": "Cada día 7:05",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [
+        0,
+        0
+      ],
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "cronExpression",
+              "expression": "5 7 * * *"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "a2",
+      "name": "Revisar ahora (a mano)",
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [
+        0,
+        200
+      ],
+      "parameters": {}
+    },
+    {
+      "id": "c1",
+      "name": "Depósitos de saldo",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        240,
+        100
+      ],
+      "parameters": {
+        "url": "https://api.explee.com/public/api/v1/autogtm/billing/activity",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "options": {}
+      },
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "1K5Hj4X9btSUKWco",
+          "name": "Explee"
+        }
+      },
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 5000
+    },
+    {
+      "id": "c2",
+      "name": "Recargas",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        460,
+        100
+      ],
+      "parameters": {
+        "jsCode": "const filas = [];\nfor (const it of $input.all()) {\n  for (const x of (it.json.items || [])) {\n    if (x.kind !== 'paid' || !x.occurred_at || !(Number(x.amount_usd) > 0)) continue; // solo dinero pagado, no créditos de regalo\n    filas.push({\n      id: 'explee:' + String(x.occurred_at).slice(0, 19), proveedor: 'explee', cuenta: 'wiptool.com', numero: '',\n      fecha: new Date(Date.parse(x.occurred_at) - 5 * 3600e3).toISOString().slice(0, 10), // hora de Colombia\n      monto: Number(x.amount_usd), moneda: 'USD', estado: 'PAID', periodo: '', archivo: '', correo_url: '',\n    });\n  }\n}\nreturn filas.length ? [{ json: { filas } }] : [];"
+      }
+    },
+    {
+      "id": "c3",
+      "name": "Guardar recargas nuevas",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        680,
+        100
+      ],
+      "parameters": {
+        "url": "https://tlpnkcroqenudzgiqzum.supabase.co/rest/v1/proveedor_factura?on_conflict=id",
+        "method": "POST",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Prefer",
+              "value": "resolution=ignore-duplicates,return=minimal"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify($json.filas) }}",
+        "options": {}
+      },
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "LWRuov5D7s6ILPbQ",
+          "name": "Supabase (tablero)"
+        }
+      }
+    },
+    {
+      "id": "c4",
+      "name": "Marcar carga",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        900,
+        100
+      ],
+      "executeOnce": true,
+      "parameters": {
+        "url": "https://tlpnkcroqenudzgiqzum.supabase.co/rest/v1/rpc/registrar_carga",
+        "method": "POST",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ p_fuente: 'explee-facturas', p_filas: $('Recargas').first().json.filas.length }) }}",
+        "options": {}
+      },
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "LWRuov5D7s6ILPbQ",
+          "name": "Supabase (tablero)"
+        }
+      }
+    }
+  ],
+  "connections": {
+    "Cada día 7:05": {
+      "main": [
+        [
+          {
+            "node": "Depósitos de saldo",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Revisar ahora (a mano)": {
+      "main": [
+        [
+          {
+            "node": "Depósitos de saldo",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Depósitos de saldo": {
+      "main": [
+        [
+          {
+            "node": "Recargas",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Recargas": {
+      "main": [
+        [
+          {
+            "node": "Guardar recargas nuevas",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Guardar recargas nuevas": {
+      "main": [
+        [
+          {
+            "node": "Marcar carga",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "timezone": "America/Bogota",
+    "errorWorkflow": "EnFP5wE2LSfxcvxi"
+  }
+}

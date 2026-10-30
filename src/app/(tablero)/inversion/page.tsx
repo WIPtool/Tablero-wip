@@ -12,6 +12,8 @@ export const metadata: Metadata = { title: 'Inversión' };
 //  - Brevo: flujo n8n F24 con los correos de factura de Brevo (PDF adjunto) que llegan a misha@wiptool.com; el PDF queda en el
 //    bucket "facturas". El histórico se trajo una vez de billing-v2.brevo.com (solo con la sesión web; la API pública no las da).
 //    Las «Written off» (WRITTEN_OFF) y las sin pagar (UNPAID) se listan pero no suman.
+//  - Explee: flujo n8n F25 con las recargas de saldo de la API pública (/autogtm/billing/activity, solo inserta las nuevas).
+//    El histórico se trajo una vez de la web de Explee con el número de factura de Stripe y el PDF en el bucket "facturas".
 const CUENTA_META = '1212455492189816';
 const PROVEEDORES: Proveedor[] = [
   { id: 'meta', titulo: 'Meta Ads', modo: 'cobros',
@@ -28,7 +30,10 @@ const PROVEEDORES: Proveedor[] = [
     recibo: (f) => `https://billing-v2.brevo.com/billing/api/v2/invoices/download/${encodeURIComponent(f.numero)}`,
     fuente: 'Facturas del plan Starter de Brevo (marketing, US$17 al mes). Brevo manda la factura de cada renovación a misha@wiptool.com y se revisa cada día a las 6:55 a. m.: del PDF se toman el número, el total y si se cobró. Las facturas anteriores se trajeron una vez del historial de Brevo. La de septiembre que Brevo dio por perdida («Written off») se lista pero no suma.' },
   { id: 'anthropic', titulo: 'Claude', proximo: true },
-  { id: 'explee', titulo: 'Explee', proximo: true },
+  { id: 'explee', titulo: 'Explee', modo: 'cobros', pagar: 'https://explee.com/app-auto-gtm/billing', pagarTexto: 'Facturación en Explee',
+    palabras: { cobro: 'recarga', cobros: 'recargas', numero: 'Factura', recibo: 'PDF', ultimo: 'Última recarga', tabla: 'Recargas y facturas', enlace: 'Ver en Explee' },
+    recibo: () => 'https://explee.com/app-auto-gtm/billing',
+    fuente: 'Recargas de saldo de Explee (prospección en frío, US$0,04 por correo enviado), pagadas por Stripe con la tarjeta ••5177. Cada día a las 7:05 a. m. se revisa la API de Explee y las recargas nuevas aparecen con su fecha y monto; su número de factura y su PDF se ven en Explee, porque la API no los da. Las anteriores se trajeron una vez con su PDF. Los créditos de regalo no cuentan. Si el saldo se acaba, Explee cobra directo a la tarjeta, como los US$4,98 del 15 de septiembre: esos cobros no salen en la API.' },
 ];
 
 export default async function PaginaInversion({ searchParams }: { searchParams: Promise<ParametrosBusqueda> }) {
