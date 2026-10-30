@@ -145,13 +145,18 @@ async function Facturas({ prov }: { prov: Proveedor }) {
     if (m) { m.total += Number(f.monto ?? 0); m.cobros += 1; }
   }
   const enlaces = await firmar(facturas.flatMap((f) => [f.archivo, f.archivo_csv ?? '']).filter(Boolean));
+  // Lo que no está en pesos se muestra también en pesos, aproximado con la TRM del día de cada factura.
+  const filas: Fila[] = facturas.map((f) => ({ f, prov }));
+  const enPesos = moneda !== 'COP' ? await aPesos(filas) : null;
+  const pesos12 = enPesos && filas.filter((x) => suma(x.f) && x.f.fecha > hace12).reduce((s, x) => s + Number(x.cop ?? 0), 0);
 
   const cifras: Cifra[] = [
     { etiqueta: (p.ultimo ?? `Último ${p.cobro}`) + (ultima?.periodo ? ` (${nombrePeriodo(ultima.periodo)})` : ''), valor: ultima?.monto ?? null,
       anterior: penultima?.monto ?? null, formato: (v) => dinero(v, moneda), principal: true, menorEsMejor: true,
       nota: ultima ? fechaLarga(ultima.fecha) : `Sin ${p.cobros} todavía` },
-    { etiqueta: 'Total en 12 meses', valor: cobrado12, formato: (v) => dinero(v, moneda) },
-    { etiqueta: 'Promedio por mes (12 meses)', valor: cobrado12 == null ? null : cobrado12 / 12, formato: (v) => dinero(v, moneda) },
+    { etiqueta: 'Total en 12 meses', valor: cobrado12, formato: (v) => dinero(v, moneda), nota: pesos12 ? `≈ ${dinero(pesos12, 'COP')}` : undefined },
+    { etiqueta: 'Promedio por mes (12 meses)', valor: cobrado12 == null ? null : cobrado12 / 12, formato: (v) => dinero(v, moneda),
+      nota: pesos12 ? `≈ ${dinero(pesos12 / 12, 'COP')}` : undefined },
     { etiqueta: `${mayuscula(p.cobros)} en 12 meses`, valor: ultimos12.length, nota: `${cobradas.length} desde el inicio` },
   ];
 
@@ -163,7 +168,7 @@ async function Facturas({ prov }: { prov: Proveedor }) {
       <Rejilla>
         <PorMes porMes={porMes} moneda={moneda} />
         <Tarjeta titulo={p.tabla ?? mayuscula(p.cobros)} nota={`${facturas.length} ${facturas.length === 1 ? p.cobro : p.cobros}`} col={8}>
-          <TablaFacturas filas={facturas.map((f) => ({ f, prov }))} enlaces={enlaces} numero={p.numero} vacio={`Aún no hay ${p.cobros}.`} />
+          <TablaFacturas filas={filas} enlaces={enlaces} numero={p.numero} vacio={`Aún no hay ${p.cobros}.`} />
         </Tarjeta>
         {prov.pagos && <Movimientos movimientos={d.movimientos} />}
       </Rejilla>
@@ -171,7 +176,17 @@ async function Facturas({ prov }: { prov: Proveedor }) {
   );
 }
 
-interface Fila { f: FacturaProveedor; prov: Proveedor; convertido?: number | null }
+// convertido: en la moneda del Total; cop: en pesos (aproximado con la TRM del día), para lo que no está en pesos.
+interface Fila { f: FacturaProveedor; prov: Proveedor; convertido?: number | null; cop?: number | null }
+
+// Llena el valor en pesos de cada fila y dice si hay algo que no esté en pesos.
+async function aPesos(filas: Fila[]) {
+  if (!filas.some((x) => x.f.moneda !== 'COP')) return false;
+  const fechas = filas.map((x) => x.f.fecha).sort();
+  const convertir = await convertidor('COP', filas.map((x) => x.f), fechas[0], fechas[fechas.length - 1]);
+  for (const x of filas) x.cop = convertir(x.f);
+  return true;
+}
 
 // Todos los proveedores de la página: cifras, total por mes y por proveedor en una sola moneda, y las facturas de 12 meses.
 async function Total({ paginaId, proveedores, moneda }: { paginaId: string; proveedores: Proveedor[]; moneda: 'USD' | 'COP' }) {
@@ -207,11 +222,15 @@ async function Total({ paginaId, proveedores, moneda }: { paginaId: string; prov
   const lista = filas.filter((x) => x.f.fecha > hace12);
   const enlaces = await firmar(lista.flatMap((x) => [x.f.archivo, x.f.archivo_csv ?? '']).filter(Boolean));
   const monedas = [...new Set(filas.map((x) => x.f.moneda))];
+  // En pesos: el mismo total si la página suma en pesos; si suma en dólares, aproximado con la TRM de cada factura.
+  if (moneda === 'COP') for (const x of filas) x.cop = x.convertido; else await aPesos(filas);
+  const pesos12 = moneda === 'COP' ? null : de12.reduce((s, x) => s + Number(x.cop ?? 0), 0);
 
   const cifras: Cifra[] = [
     { etiqueta: 'Total en 12 meses', valor: total12, anterior: anteriores.length ? sumar(anteriores) : null, formato: (v) => dinero(v, moneda),
-      principal: true, menorEsMejor: true, nota: `${activos.length} proveedores, en ${NOMBRE_MONEDA[moneda]}` },
-    { etiqueta: 'Promedio por mes (12 meses)', valor: total12 / 12, formato: (v) => dinero(v, moneda) },
+      principal: true, menorEsMejor: true, nota: `${activos.length} proveedores, en ${NOMBRE_MONEDA[moneda]}${pesos12 ? ` · ≈ ${dinero(pesos12, 'COP')}` : ''}` },
+    { etiqueta: 'Promedio por mes (12 meses)', valor: total12 / 12, formato: (v) => dinero(v, moneda),
+      nota: pesos12 ? `≈ ${dinero(pesos12 / 12, 'COP')}` : undefined },
     { etiqueta: 'Este mes', valor: sumar(suman.filter((x) => x.f.fecha.startsWith(esteMes))), formato: (v) => dinero(v, moneda),
       nota: `${mayuscula(mesLargo(mesPasado + '-01'))}: ${dinero(sumar(suman.filter((x) => x.f.fecha.startsWith(mesPasado))), moneda)}` },
     { etiqueta: 'Facturas y cobros en 12 meses', valor: de12.length },
@@ -223,6 +242,7 @@ async function Total({ paginaId, proveedores, moneda }: { paginaId: string; prov
       <Aviso>
         Suma de las pestañas de esta página, por la fecha de cada factura o cobro. Las que el proveedor no cobró no suman.
         {monedas.some((m) => m !== moneda) && ` Todo se pasa a ${NOMBRE_MONEDA[moneda]} con la TRM del día de cada cobro${monedas.includes('EUR') ? ' (los euros, con la tasa del Banco Central Europeo de ese día)' : ''}.`}
+        {moneda !== 'COP' && ' El valor en pesos es aproximado, con la TRM del día de cada factura.'}
         {sinTasa.length > 0 && ` ${sinTasa.length} ${sinTasa.length === 1 ? 'cobro no tiene' : 'cobros no tienen'} tasa de cambio y no ${sinTasa.length === 1 ? 'suma' : 'suman'}.`}
       </Aviso>
       <Rejilla>
@@ -253,8 +273,7 @@ async function Total({ paginaId, proveedores, moneda }: { paginaId: string; prov
           </div>
         </Tarjeta>
         <Tarjeta titulo="Facturas y cobros" nota={`Últimos 12 meses · ${lista.length}`}>
-          <TablaFacturas filas={lista} enlaces={enlaces} numero="Número" conProveedor monedaTotal={monedas.some((m) => m !== moneda) ? moneda : undefined}
-            vacio="Aún no hay facturas ni cobros." />
+          <TablaFacturas filas={lista} enlaces={enlaces} numero="Número" conProveedor vacio="Aún no hay facturas ni cobros." />
         </Tarjeta>
       </Rejilla>
     </>
@@ -274,8 +293,14 @@ async function convertidor(destino: string, facturas: FacturaProveedor[], desde:
   let trm: [string, number][] = [];
   let eur: [string, number][] = [];
   if (MODO_EJEMPLO) { trm = [[desde, 4000]]; eur = [[desde, 1.1]]; } else {
-    const { data } = await (await clienteServidor()).from('trm_diaria').select('fecha, valor').gte('fecha', restarDias(desde, 10)).order('fecha');
-    trm = (data ?? []).map((r: { fecha: string; valor: number }) => [r.fecha, Number(r.valor)]);
+    // La TRM va desde 2021 (un valor por día): se lee de a 1.000 filas, el máximo que entrega Supabase por consulta.
+    const supabase = await clienteServidor();
+    for (let i = 0; ; i += 1000) {
+      const { data } = await supabase.from('trm_diaria').select('fecha, valor').gte('fecha', restarDias(desde, 10)).lte('fecha', hasta)
+        .order('fecha').range(i, i + 999);
+      trm.push(...(data ?? []).map((r: { fecha: string; valor: number }) => [r.fecha, Number(r.valor)] as [string, number]));
+      if (!data || data.length < 1000) break;
+    }
     if (monedas.has('EUR')) {
       try {
         const r = await fetch(`https://api.frankfurter.app/${restarDias(desde, 10)}..${hasta}?from=EUR&to=USD`, { next: { revalidate: 86400 } });
@@ -318,12 +343,14 @@ function PorMes({ porMes, moneda }: { porMes: Map<string, { total: number; cobro
   );
 }
 
-// La misma tabla en todas las pestañas. En el Total lleva además el proveedor y, si hay varias monedas, el valor convertido.
-function TablaFacturas({ filas, enlaces, numero, vacio, conProveedor, monedaTotal }: {
-  filas: Fila[]; enlaces: Map<string, string>; numero: string; vacio: string; conProveedor?: boolean; monedaTotal?: string;
+// La misma tabla en todas las pestañas. En el Total lleva además el proveedor. Si hay montos en dólares o euros, al lado va
+// el valor en pesos, aproximado con la TRM del día de cada factura.
+function TablaFacturas({ filas, enlaces, numero, vacio, conProveedor }: {
+  filas: Fila[]; enlaces: Map<string, string>; numero: string; vacio: string; conProveedor?: boolean;
 }) {
   const conPeriodo = filas.some((x) => x.f.periodo);
-  const columnas = 6 + (conProveedor ? 1 : 0) + (conPeriodo ? 1 : 0) + (monedaTotal ? 1 : 0);
+  const conPesos = filas.some((x) => x.f.moneda !== 'COP');
+  const columnas = 6 + (conProveedor ? 1 : 0) + (conPeriodo ? 1 : 0) + (conPesos ? 1 : 0);
   return (
     <div className="-mx-1 max-h-[560px] overflow-auto">
       <table className="w-full border-collapse text-[13px]">
@@ -331,12 +358,12 @@ function TablaFacturas({ filas, enlaces, numero, vacio, conProveedor, monedaTota
           <tr>
             <th className={th}>Fecha</th>{conProveedor && <th className={th}>Proveedor</th>}{conPeriodo && <th className={th}>Consumo de</th>}
             <th className={th}>Cuenta</th><th className={th}>{numero}</th><th className={`${th} text-right`}>Total</th>
-            {monedaTotal && <th className={`${th} text-right`}>En {NOMBRE_MONEDA[monedaTotal]}</th>}
+            {conPesos && <th className={`${th} text-right`} title="Con la TRM del día de cada factura">En pesos (aprox.)</th>}
             <th className={th}>Estado</th><th className={th}><span className="sr-only">Acciones</span></th>
           </tr>
         </thead>
         <tbody>
-          {filas.length ? filas.map(({ f, prov, convertido }) => {
+          {filas.length ? filas.map(({ f, prov, cop }) => {
             const p = palabrasDe(prov);
             const url = enlaces.get(f.archivo);
             const urlCsv = f.archivo_csv ? enlaces.get(f.archivo_csv) : undefined;
@@ -353,9 +380,9 @@ function TablaFacturas({ filas, enlaces, numero, vacio, conProveedor, monedaTota
                 <td className={`${td} whitespace-nowrap text-right tabular-nums`}>
                   {estado?.noSuma ? <s className="text-tenue">{dinero(f.monto, f.moneda)}</s> : dinero(f.monto, f.moneda)}
                 </td>
-                {monedaTotal && (
+                {conPesos && (
                   <td className={`${td} whitespace-nowrap text-right tabular-nums text-suave`}>
-                    {estado?.noSuma ? '' : convertido == null ? '—' : dinero(convertido, monedaTotal)}
+                    {cop == null ? '—' : estado?.noSuma ? <s className="text-tenue">{dinero(cop, 'COP')}</s> : dinero(cop, 'COP')}
                   </td>
                 )}
                 <td className={td}>{f.estado ? (
