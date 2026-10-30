@@ -14,6 +14,7 @@ export const metadata: Metadata = { title: 'Inversión' };
 //    Las «Written off» (WRITTEN_OFF) y las sin pagar (UNPAID) se listan pero no suman.
 //  - Explee: flujo n8n F25 con las recargas de saldo de la API pública (/autogtm/billing/activity, solo inserta las nuevas).
 //    El histórico se trajo una vez de la web de Explee con el número de factura de Stripe y el PDF en el bucket "facturas".
+//  - n8n: flujo n8n F26 con los recibos de Paddle de n8n Cloud (correo); el servidor del n8n propio va en la factura de AWS.
 const CUENTA_META = '1212455492189816';
 const PROVEEDORES: Proveedor[] = [
   { id: 'meta', titulo: 'Meta Ads', modo: 'cobros',
@@ -24,7 +25,10 @@ const PROVEEDORES: Proveedor[] = [
     palabras: { cobro: 'pedido', cobros: 'pedidos', numero: 'Pedido', recibo: 'Factura', tabla: 'Pedidos y facturas' },
     recibo: (f) => `https://wiptool.kommo.com/orders/${encodeURIComponent(f.numero)}/invoice`,
     fuente: 'Pedidos pagados de la cuenta de Kommo wiptool (plan Básico, por licencia), leídos cada día a las 6:50 a. m. de los correos «Tu pedido fue pagado con éxito» que llegan a misha@wiptool.com. Kommo no da la facturación por API y el correo no trae el monto: se toma del historial de pedidos de Kommo. El botón Factura la abre en Kommo y necesita una sesión abierta.' },
-  { id: 'n8n', titulo: 'n8n', proximo: true },
+  { id: 'n8n', titulo: 'n8n', modo: 'cobros', pagar: 'https://app.n8n.cloud/', pagarTexto: 'Cuenta de n8n Cloud',
+    palabras: { cobro: 'cobro', cobros: 'cobros', numero: 'Recibo', recibo: 'Recibo', enlace: 'Ver recibo', ultimo: 'Último cobro', tabla: 'Cobros y recibos' },
+    recibo: (f) => f.correo_url,
+    fuente: 'Suscripción de n8n Cloud (plan Starter, 24 € al mes) cobrada por Paddle a la Visa ••6020. Cada día a las 7:10 a. m. se revisan los recibos que llegan a misha@wiptool.com; el botón abre el correo, que trae el recibo de Paddle. Desde el 28 de octubre de 2026 los flujos corren en el n8n propio (n8n.wiptool.com), cuyo servidor (Lightsail, US$12 al mes) se cobra dentro de la factura de AWS, en Operaciones › Gastos. Si Cloud no se cancela antes del 11 de noviembre, vuelve a cobrar y el cobro aparece aquí.' },
   { id: 'brevo', titulo: 'Brevo', modo: 'cobros', pagar: 'https://app.brevo.com/billing/account/plans/billing-history', pagarTexto: 'Facturación en Brevo',
     palabras: { cobro: 'factura', cobros: 'facturas', numero: 'Factura', recibo: 'PDF', ultimo: 'Última factura', tabla: 'Facturas' },
     recibo: (f) => `https://billing-v2.brevo.com/billing/api/v2/invoices/download/${encodeURIComponent(f.numero)}`,

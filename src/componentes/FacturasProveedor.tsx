@@ -27,7 +27,7 @@ const NO_COBRADA: Record<string, string> = { WRITTEN_OFF: 'No se cobró', UNPAID
 const dosDecimales = new Intl.NumberFormat('es-CO', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 const pesos = new Intl.NumberFormat('es-CO', { maximumFractionDigits: 0 });
 const dinero = (v: number | null | undefined, moneda = 'USD') =>
-  v == null ? '—' : moneda === 'COP' ? `$${pesos.format(v)}` : `${moneda === 'USD' ? 'US$' : moneda} ${dosDecimales.format(v)}`;
+  v == null ? '—' : moneda === 'COP' ? `$${pesos.format(v)}` : `${({ USD: 'US$', EUR: '€' } as Record<string, string>)[moneda] ?? moneda} ${dosDecimales.format(v)}`;
 const nombrePeriodo = (p: string) => (/^\d{4}-\d{2}$/.test(p) ? mesLargo(p + '-01') : p);
 
 const chip = (activo: boolean) =>
