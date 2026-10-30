@@ -5,6 +5,8 @@
 // También lee los recibos de Anthropic (invoice+statements@mail.anthropic.com), con la factura en PDF y el monto del correo:
 // los dirigidos a la cuenta de claude.ai de una persona (PERSONAS; llegan reenviados por un filtro de Gmail) van a su
 // pestaña ('claude-misha'…); las compras de créditos de la API a misha@wiptool.com, a Claude Platform ('claude-platform').
+// Y los avisos de cobro de AWS (no-reply@amazonaws.com a info@aplicando.co, que llegan a este buzón): pagos recibidos y cobros
+// fallidos (proveedor_movimiento, 'aws'); con ellos el tablero deduce qué facturas de AWS están pagadas.
 // Corre cada día a las 6:30 a. m. (últimos 60 días); el disparador manual carga todo el histórico.
 // Uso: node n8n/armar-f21.cjs   (después se importa en n8n.wiptool.com)
 const fs = require('fs');
@@ -14,7 +16,9 @@ const CRED_GOOGLE = { id: 'jnLeMVYFho7CTP6Q', name: 'Google account' };
 const CRED_SUPABASE = { id: 'LWRuov5D7s6ILPbQ', name: 'Supabase (tablero)' };
 const SUPABASE = 'https://tlpnkcroqenudzgiqzum.supabase.co';
 const GMAIL = 'https://gmail.googleapis.com/gmail/v1/users/me/messages';
-const CONSULTA = '((from:payments-noreply@google.com subject:"Google Workspace") OR (from:mail.anthropic.com subject:receipt))';
+const CONSULTA = '((from:payments-noreply@google.com subject:"Google Workspace") OR (from:mail.anthropic.com subject:receipt) OR '
+  + '(from:no-reply@amazonaws.com (subject:"Gracias por el pago" OR subject:"Intento de pago exitoso" OR subject:"pendientes de pago" OR '
+  + 'subject:"riesgo de suspensión" OR subject:"restringido por impago" OR subject:"Payment Failure" OR subject:"Thank you for your payment")))';
 
 // Clasifica cada correo: factura (con su PDF), pago recibido o pago rechazado.
 const clasificar = String.raw`
@@ -63,6 +67,26 @@ for (const it of $input.all()) {
     const p = t.match(/Amount paid\s+\$\s?([\d.,]+)/i) || t.match(/Total\s+\$\s?([\d.,]+)/i);
     salida.push({ json: { id: m.id, proveedor, cuenta: para, fecha, correo_url, asunto, tipo: 'factura', numero: n,
       adjunto: pdf.id, monto: p ? numero(p[1]) : null, estado: 'PAID' } });
+    continue;
+  }
+  // Avisos de cobro de AWS: pago recibido (con las facturas que pagó y el saldo que queda) o cobro fallido. El cobro automático
+  // que sale bien no avisa; el tablero da por pagada una factura si después hubo un pago o ningún cobro fallido.
+  if (/@amazonaws\.com/i.test(cab.from || '')) {
+    const t = cuerpo || texto(m.payload, 'text/html').replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ');
+    const fila = { id: m.id, proveedor: 'aws', cuenta: (t.match(/\b(\d{12})\b/) || [])[1] || '', fecha, monto: null, moneda: 'USD', detalle: '', correo_url };
+    const tarjeta = (t.match(/(?:tarjeta|Card ending)\s+(\d{4})(?![\s\S]*(?:tarjeta|Card ending)\s+\d{4})/i) || [])[1];
+    if (/gracias por el pago|pago exitoso|thank you for your payment/i.test(asunto)) {
+      const facturas = [...new Set([...t.matchAll(/Invoice\s+(\d{6,})/gi)].map((x) => x[1]))];
+      const importe = t.match(/charged the amount of\s*([\d.,]+)\s*USD/i) || t.match(/importe de\s*([\d.,]+)\s*USD/i);
+      const saldo = t.match(/outstanding balance of\s*([\d.,]+)\s*USD/i);
+      const detalle = facturas.length ? 'Factura ' + facturas.join(', ') + (saldo ? ' · saldo pendiente ' + saldo[1] + ' USD' : '')
+        : tarjeta ? 'Cobrado a la tarjeta de respaldo ••' + tarjeta : '';
+      salida.push({ json: { id: m.id, tipo: 'pago', fila: { ...fila, tipo: 'pago', monto: importe ? numero(importe[1]) : null, detalle } } });
+    } else {
+      const motivo = /restringid/i.test(asunto) ? 'Cuenta restringida por impago' : /suspensi/i.test(asunto) ? 'Riesgo de suspensión'
+        : /vencidos/i.test(asunto) ? 'Cargos vencidos' : 'Cobro rechazado';
+      salida.push({ json: { id: m.id, tipo: 'rechazo', fila: { ...fila, tipo: 'rechazo', detalle: motivo + (tarjeta ? ' · tarjeta ••' + tarjeta : '') } } });
+    }
     continue;
   }
   const base = { id: m.id, proveedor: 'google-workspace', cuenta, fecha, correo_url, asunto };

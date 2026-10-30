@@ -34,8 +34,21 @@ const ESTADOS: Record<string, { texto: string; clase: string; noSuma?: boolean }
   INVOICED: { texto: 'Facturada', clase: 'border-aviso text-aviso' }, FORGIVEN: { texto: 'Condonada', clase: 'border-linea text-suave' },
   FREE: { texto: 'Sin costo', clase: 'border-linea text-suave' }, PREPAID: { texto: 'Prepagada', clase: 'border-linea text-suave' },
   WRITTEN_OFF: { texto: 'No se cobró', clase: 'border-linea text-suave', noSuma: true }, UNPAID: { texto: 'Sin pagar', clase: 'border-malo/50 text-malo', noSuma: true },
+  SIN_PAGAR: { texto: 'Sin pagar', clase: 'border-malo/50 text-malo' }, // deducido de los pagos y cobros fallidos; se debe, así que suma
 };
 const suma = (f: FacturaProveedor) => !ESTADOS[f.estado]?.noSuma;
+
+// Estado de pago de las facturas que no lo traen (Google Workspace, AWS), con los pagos y cobros fallidos del proveedor:
+// pagada si es anterior al último pago; sin pagar si después del último pago hubo un cobro fallido (desde 5 días antes de la
+// factura, porque el intento de cobro puede llegar antes que ella); si no, se da por cobrada (el cobro automático no avisa).
+function estadosDePago(d: Gastos, prov: Proveedor): FacturaProveedor[] {
+  if (!prov.pagos) return d.facturas;
+  const ultimoPago = d.movimientos.filter((m) => m.tipo === 'pago').reduce((u, m) => (m.fecha > u ? m.fecha : u), '');
+  const rechazos = d.movimientos.filter((m) => m.tipo === 'rechazo' && m.fecha > ultimoPago).map((m) => m.fecha);
+  return d.facturas.map((f) => (f.estado ? f : {
+    ...f, estado: f.fecha > ultimoPago && rechazos.some((r) => r >= restarDias(f.fecha, 5)) ? 'SIN_PAGAR' : 'PAID',
+  }));
+}
 
 const dosDecimales = new Intl.NumberFormat('es-CO', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 const pesos = new Intl.NumberFormat('es-CO', { maximumFractionDigits: 0 });
@@ -117,11 +130,12 @@ async function firmar(rutas: string[]) {
 // Un proveedor: cifras de las facturas cobradas, total por mes, tabla y (si los trae) pagos y cobros rechazados.
 async function Facturas({ prov }: { prov: Proveedor }) {
   const d = await pedir<Gastos>('tablero_gastos', { p_proveedor: prov.id });
+  const facturas = estadosDePago(d, prov);
   const p = palabrasDe(prov);
-  const moneda = d.facturas[0]?.moneda ?? 'USD';
+  const moneda = facturas[0]?.moneda ?? 'USD';
   const hoy = hoyBogota();
   const hace12 = restarDias(hoy, 365);
-  const cobradas = d.facturas.filter(suma);
+  const cobradas = facturas.filter(suma);
   const ultimos12 = cobradas.filter((f) => f.fecha > hace12);
   const cobrado12 = ultimos12.length ? ultimos12.reduce((s, f) => s + Number(f.monto ?? 0), 0) : null;
   const [ultima, penultima] = cobradas;
@@ -130,7 +144,7 @@ async function Facturas({ prov }: { prov: Proveedor }) {
     const m = porMes.get(f.fecha.slice(0, 7));
     if (m) { m.total += Number(f.monto ?? 0); m.cobros += 1; }
   }
-  const enlaces = await firmar(d.facturas.flatMap((f) => [f.archivo, f.archivo_csv ?? '']).filter(Boolean));
+  const enlaces = await firmar(facturas.flatMap((f) => [f.archivo, f.archivo_csv ?? '']).filter(Boolean));
 
   const cifras: Cifra[] = [
     { etiqueta: (p.ultimo ?? `Último ${p.cobro}`) + (ultima?.periodo ? ` (${nombrePeriodo(ultima.periodo)})` : ''), valor: ultima?.monto ?? null,
@@ -148,8 +162,8 @@ async function Facturas({ prov }: { prov: Proveedor }) {
       {prov.fuente && <Aviso>{prov.fuente}</Aviso>}
       <Rejilla>
         <PorMes porMes={porMes} moneda={moneda} />
-        <Tarjeta titulo={p.tabla ?? mayuscula(p.cobros)} nota={`${d.facturas.length} ${d.facturas.length === 1 ? p.cobro : p.cobros}`} col={8}>
-          <TablaFacturas filas={d.facturas.map((f) => ({ f, prov }))} enlaces={enlaces} numero={p.numero} vacio={`Aún no hay ${p.cobros}.`} />
+        <Tarjeta titulo={p.tabla ?? mayuscula(p.cobros)} nota={`${facturas.length} ${facturas.length === 1 ? p.cobro : p.cobros}`} col={8}>
+          <TablaFacturas filas={facturas.map((f) => ({ f, prov }))} enlaces={enlaces} numero={p.numero} vacio={`Aún no hay ${p.cobros}.`} />
         </Tarjeta>
         {prov.pagos && <Movimientos movimientos={d.movimientos} />}
       </Rejilla>
@@ -166,7 +180,7 @@ async function Total({ paginaId, proveedores, moneda }: { paginaId: string; prov
   const hoy = hoyBogota();
   const hace12 = restarDias(hoy, 365);
   const hace24 = restarDias(hoy, 730);
-  const filas: Fila[] = activos.flatMap((prov, i) => datos[i].facturas.filter((f) => f.fecha > hace24).map((f) => ({ f, prov })));
+  const filas: Fila[] = activos.flatMap((prov, i) => estadosDePago(datos[i], prov).filter((f) => f.fecha > hace24).map((f) => ({ f, prov })));
   const convertir = await convertidor(moneda, filas.map((x) => x.f), hace24, hoy);
   for (const x of filas) x.convertido = convertir(x.f);
   filas.sort((a, b) => b.f.fecha.localeCompare(a.f.fecha));
@@ -309,8 +323,7 @@ function TablaFacturas({ filas, enlaces, numero, vacio, conProveedor, monedaTota
   filas: Fila[]; enlaces: Map<string, string>; numero: string; vacio: string; conProveedor?: boolean; monedaTotal?: string;
 }) {
   const conPeriodo = filas.some((x) => x.f.periodo);
-  const conEstado = conProveedor || filas.some((x) => x.f.estado);
-  const columnas = 5 + (conProveedor ? 1 : 0) + (conPeriodo ? 1 : 0) + (monedaTotal ? 1 : 0) + (conEstado ? 1 : 0);
+  const columnas = 6 + (conProveedor ? 1 : 0) + (conPeriodo ? 1 : 0) + (monedaTotal ? 1 : 0);
   return (
     <div className="-mx-1 max-h-[560px] overflow-auto">
       <table className="w-full border-collapse text-[13px]">
@@ -319,7 +332,7 @@ function TablaFacturas({ filas, enlaces, numero, vacio, conProveedor, monedaTota
             <th className={th}>Fecha</th>{conProveedor && <th className={th}>Proveedor</th>}{conPeriodo && <th className={th}>Consumo de</th>}
             <th className={th}>Cuenta</th><th className={th}>{numero}</th><th className={`${th} text-right`}>Total</th>
             {monedaTotal && <th className={`${th} text-right`}>En {NOMBRE_MONEDA[monedaTotal]}</th>}
-            {conEstado && <th className={th}>Estado</th>}<th className={th}><span className="sr-only">Acciones</span></th>
+            <th className={th}>Estado</th><th className={th}><span className="sr-only">Acciones</span></th>
           </tr>
         </thead>
         <tbody>
@@ -345,11 +358,9 @@ function TablaFacturas({ filas, enlaces, numero, vacio, conProveedor, monedaTota
                     {estado?.noSuma ? '' : convertido == null ? '—' : dinero(convertido, monedaTotal)}
                   </td>
                 )}
-                {conEstado && (
-                  <td className={td}>{f.estado && (
-                    <span className={`whitespace-nowrap rounded-full border px-2 py-0.5 text-[12px] ${(estado ?? ESTADOS.PENDING).clase}`}>{estado?.texto ?? f.estado}</span>
-                  )}</td>
-                )}
+                <td className={td}>{f.estado ? (
+                  <span className={`whitespace-nowrap rounded-full border px-2 py-0.5 text-[12px] ${(estado ?? ESTADOS.PENDING).clase}`}>{estado?.texto ?? f.estado}</span>
+                ) : <span className="text-tenue">—</span>}</td>
                 <td className={`${td} whitespace-nowrap text-right`}>
                   <span className="inline-flex gap-1.5">
                     {url ? (
