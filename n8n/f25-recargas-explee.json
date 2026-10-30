@@ -1,5 +1,5 @@
 {
-  "name": "F25 · Recargas de Explee (API → Supabase)",
+  "name": "F25 · Recargas de Explee (recibos de Stripe + API → Supabase)",
   "nodes": [
     {
       "id": "a1",
@@ -28,9 +28,297 @@
       "typeVersion": 1,
       "position": [
         0,
-        200
+        300
       ],
       "parameters": {}
+    },
+    {
+      "id": "r0",
+      "name": "Recibos 60 días",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        220,
+        0
+      ],
+      "parameters": {
+        "jsCode": "return [{ json: { q: \"\\\"Explee LTD\\\" (receipt OR recibo OR invoice OR factura) has:attachment newer_than:60d\" } }];"
+      }
+    },
+    {
+      "id": "r0b",
+      "name": "Todos los recibos",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        220,
+        150
+      ],
+      "parameters": {
+        "jsCode": "return [{ json: { q: \"\\\"Explee LTD\\\" (receipt OR recibo OR invoice OR factura) has:attachment\" } }];"
+      }
+    },
+    {
+      "id": "r1",
+      "name": "Buscar recibos",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        440,
+        80
+      ],
+      "parameters": {
+        "url": "https://gmail.googleapis.com/gmail/v1/users/me/messages",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "googleOAuth2Api",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "q",
+              "value": "={{ $json.q }}"
+            },
+            {
+              "name": "maxResults",
+              "value": "500"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "credentials": {
+        "googleOAuth2Api": {
+          "id": "jnLeMVYFho7CTP6Q",
+          "name": "Google account"
+        }
+      },
+      "retryOnFail": true,
+      "maxTries": 5,
+      "waitBetweenTries": 5000
+    },
+    {
+      "id": "r2",
+      "name": "Un ítem por recibo",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        660,
+        80
+      ],
+      "parameters": {
+        "jsCode": "return $input.all().flatMap((i) => (i.json.messages || []).map((m) => ({ json: { id: m.id } })));"
+      }
+    },
+    {
+      "id": "r3",
+      "name": "Leer recibo",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        880,
+        80
+      ],
+      "parameters": {
+        "url": "=https://gmail.googleapis.com/gmail/v1/users/me/messages/{{ $json.id }}",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "googleOAuth2Api",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "format",
+              "value": "full"
+            }
+          ]
+        },
+        "options": {
+          "batching": {
+            "batch": {
+              "batchSize": 3,
+              "batchInterval": 2000
+            }
+          }
+        }
+      },
+      "credentials": {
+        "googleOAuth2Api": {
+          "id": "jnLeMVYFho7CTP6Q",
+          "name": "Google account"
+        }
+      },
+      "retryOnFail": true,
+      "maxTries": 5,
+      "waitBetweenTries": 5000
+    },
+    {
+      "id": "r4",
+      "name": "Recibo de Explee",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1100,
+        80
+      ],
+      "parameters": {
+        "jsCode": "const texto = (p, tipo = 'text/plain') => {\n  if (!p) return '';\n  if (p.mimeType === tipo && p.body && p.body.data) return Buffer.from(p.body.data, 'base64').toString('utf8');\n  for (const h of p.parts || []) { const t = texto(h, tipo); if (t) return t; }\n  return '';\n};\nconst pdfs = (p, out = []) => {\n  if (!p) return out;\n  if (p.filename && /\\.pdf$/i.test(p.filename) && p.body && p.body.attachmentId) out.push({ nombre: p.filename, adjunto: p.body.attachmentId });\n  for (const h of p.parts || []) pdfs(h, out);\n  return out;\n};\nconst aNumero = (s) => {\n  s = String(s).replace(/[^\\d.,]/g, '');\n  const i = Math.max(s.lastIndexOf('.'), s.lastIndexOf(','));\n  if (i >= 0 && s.length - i - 1 === 2) return Number(s.slice(0, i).replace(/[.,]/g, '') + '.' + s.slice(i + 1));\n  return Number(s.replace(/[.,]/g, ''));\n};\nconst salida = [];\nfor (const it of $input.all()) {\n  const m = it.json;\n  const asunto = ((m.payload.headers || []).find((h) => h.name.toLowerCase() === 'subject') || {}).value || '';\n  const t = (texto(m.payload) || texto(m.payload, 'text/html').replace(/<[^>]+>/g, ' ')).replace(/\\s+/g, ' ');\n  if (!/Explee/i.test(asunto + ' ' + t) || /refund|reembolso/i.test(asunto)) continue; // solo cobros de Explee\n  const pdf = pdfs(m.payload).find((a) => /^(invoice|factura)/i.test(a.nombre));\n  const n = ((pdf && pdf.nombre.match(/^(?:Invoice|Factura)-(.+)\\.pdf$/i)) || [])[1];\n  if (!n) continue;\n  // «Amount paid $50.00» (inglés) o «Importe pagado 50,00 US$» (español)\n  const p = t.match(/(?:Amount paid|Importe pagado|Cantidad pagada|Monto pagado)\\s*(?:US\\$|\\$)?\\s?([\\d.,]+)/i) || t.match(/\\bTotal\\s*(?:US\\$|\\$)\\s?([\\d.,]+)/i);\n  salida.push({ json: { id: m.id, adjunto: pdf.adjunto, nombre: pdf.nombre, numero: n, monto: p ? aNumero(p[1]) : null,\n    fecha: new Date(Number(m.internalDate) - 5 * 3600e3).toISOString().slice(0, 10), // hora de Colombia\n    archivo: 'explee/' + n + '.pdf', correo_url: 'https://mail.google.com/mail/u/?authuser=misha@wiptool.com#all/' + m.id } });\n}\nreturn salida;"
+      }
+    },
+    {
+      "id": "r5",
+      "name": "Bajar PDF",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1320,
+        80
+      ],
+      "parameters": {
+        "url": "=https://gmail.googleapis.com/gmail/v1/users/me/messages/{{ $json.id }}/attachments/{{ $json.adjunto }}",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "googleOAuth2Api",
+        "options": {
+          "batching": {
+            "batch": {
+              "batchSize": 3,
+              "batchInterval": 2000
+            }
+          }
+        }
+      },
+      "credentials": {
+        "googleOAuth2Api": {
+          "id": "jnLeMVYFho7CTP6Q",
+          "name": "Google account"
+        }
+      },
+      "retryOnFail": true,
+      "maxTries": 5,
+      "waitBetweenTries": 5000
+    },
+    {
+      "id": "r6",
+      "name": "PDF a archivo",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1540,
+        80
+      ],
+      "parameters": {
+        "jsCode": "const f = $('Recibo de Explee').item.json;\nconst b64 = String($json.data || '').replace(/-/g, '+').replace(/_/g, '/');\nreturn { json: f, binary: { pdf: { data: b64, mimeType: 'application/pdf', fileName: f.nombre, fileExtension: 'pdf' } } };",
+        "mode": "runOnceForEachItem"
+      }
+    },
+    {
+      "id": "r7",
+      "name": "Subir PDF a Supabase",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1760,
+        80
+      ],
+      "parameters": {
+        "url": "=https://tlpnkcroqenudzgiqzum.supabase.co/storage/v1/object/facturas/{{ $('Recibo de Explee').item.json.archivo }}",
+        "method": "POST",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "x-upsert",
+              "value": "true"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/pdf"
+            }
+          ]
+        },
+        "sendBody": true,
+        "contentType": "binaryData",
+        "inputDataFieldName": "pdf",
+        "options": {}
+      },
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "LWRuov5D7s6ILPbQ",
+          "name": "Supabase (tablero)"
+        }
+      }
+    },
+    {
+      "id": "r8",
+      "name": "Filas existentes",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1980,
+        80
+      ],
+      "executeOnce": true,
+      "alwaysOutputData": true,
+      "parameters": {
+        "url": "https://tlpnkcroqenudzgiqzum.supabase.co/rest/v1/proveedor_factura?proveedor=eq.explee&select=id,numero,fecha,monto",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "options": {}
+      },
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "LWRuov5D7s6ILPbQ",
+          "name": "Supabase (tablero)"
+        }
+      }
+    },
+    {
+      "id": "r9",
+      "name": "Unir recibos",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2200,
+        80
+      ],
+      "parameters": {
+        "jsCode": "const dias = (a, b) => Math.abs(Date.parse(a) - Date.parse(b)) / 864e5;\nconst esDeApi = (id) => /^explee:\\d{4}-\\d{2}-\\d{2}T/.test(id); // id de una recarga cargada por la API\nconst existentes = (nodo) => $(nodo).all().map((i) => i.json).filter((r) => r && r.id);\nconst filasHoy = existentes('Filas existentes');\nconst usados = new Set();\nconst filas = [];\nfor (const it of $('Recibo de Explee').all()) {\n  const r = it.json;\n  const fila = filasHoy.find((e) => e.numero === r.numero)\n    || filasHoy.find((e) => !e.numero && esDeApi(e.id) && !usados.has(e.id) && dias(e.fecha, r.fecha) <= 1 && Number(e.monto) === Number(r.monto));\n  const id = fila ? fila.id : 'explee:' + r.numero;\n  usados.add(id);\n  filas.push({ id, proveedor: 'explee', cuenta: 'wiptool.com', numero: r.numero, fecha: fila ? fila.fecha : r.fecha,\n    monto: r.monto != null ? r.monto : (fila ? Number(fila.monto) : null), moneda: 'USD', estado: 'PAID', periodo: '',\n    archivo: r.archivo, correo_url: r.correo_url });\n}\nreturn filas.length ? [{ json: { filas } }] : [];"
+      }
+    },
+    {
+      "id": "r10",
+      "name": "Guardar recibos",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        2420,
+        80
+      ],
+      "parameters": {
+        "url": "https://tlpnkcroqenudzgiqzum.supabase.co/rest/v1/proveedor_factura?on_conflict=id",
+        "method": "POST",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Prefer",
+              "value": "resolution=merge-duplicates,return=minimal"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify($json.filas) }}",
+        "options": {}
+      },
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "LWRuov5D7s6ILPbQ",
+          "name": "Supabase (tablero)"
+        }
+      }
     },
     {
       "id": "c1",
@@ -38,8 +326,8 @@
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
       "position": [
-        240,
-        100
+        220,
+        400
       ],
       "parameters": {
         "url": "https://api.explee.com/public/api/v1/autogtm/billing/activity",
@@ -58,16 +346,40 @@
       "waitBetweenTries": 5000
     },
     {
+      "id": "c1b",
+      "name": "Filas actuales",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        440,
+        400
+      ],
+      "executeOnce": true,
+      "alwaysOutputData": true,
+      "parameters": {
+        "url": "https://tlpnkcroqenudzgiqzum.supabase.co/rest/v1/proveedor_factura?proveedor=eq.explee&select=id,numero,fecha,monto",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "options": {}
+      },
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "LWRuov5D7s6ILPbQ",
+          "name": "Supabase (tablero)"
+        }
+      }
+    },
+    {
       "id": "c2",
       "name": "Recargas",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        460,
-        100
+        660,
+        400
       ],
       "parameters": {
-        "jsCode": "const filas = [];\nfor (const it of $input.all()) {\n  for (const x of (it.json.items || [])) {\n    if (x.kind !== 'paid' || !x.occurred_at || !(Number(x.amount_usd) > 0)) continue; // solo dinero pagado, no créditos de regalo\n    filas.push({\n      id: 'explee:' + String(x.occurred_at).slice(0, 19), proveedor: 'explee', cuenta: 'wiptool.com', numero: '',\n      fecha: new Date(Date.parse(x.occurred_at) - 5 * 3600e3).toISOString().slice(0, 10), // hora de Colombia\n      monto: Number(x.amount_usd), moneda: 'USD', estado: 'PAID', periodo: '', archivo: '', correo_url: '',\n    });\n  }\n}\nreturn filas.length ? [{ json: { filas } }] : [];"
+        "jsCode": "const dias = (a, b) => Math.abs(Date.parse(a) - Date.parse(b)) / 864e5;\nconst esDeApi = (id) => /^explee:\\d{4}-\\d{2}-\\d{2}T/.test(id); // id de una recarga cargada por la API\nconst existentes = (nodo) => $(nodo).all().map((i) => i.json).filter((r) => r && r.id);\nconst filasHoy = existentes('Filas actuales');\nconst ids = new Set(filasHoy.map((e) => e.id));\nconst usados = new Set();\nconst filas = [];\nfor (const x of ($('Depósitos de saldo').first().json.items || [])) {\n  if (x.kind !== 'paid' || !x.occurred_at || !(Number(x.amount_usd) > 0)) continue; // solo dinero pagado, no créditos de regalo\n  const id = 'explee:' + String(x.occurred_at).slice(0, 19);\n  if (ids.has(id)) continue;\n  const fecha = new Date(Date.parse(x.occurred_at) - 5 * 3600e3).toISOString().slice(0, 10); // hora de Colombia\n  const monto = Number(x.amount_usd);\n  const conRecibo = filasHoy.find((e) => e.numero && !esDeApi(e.id) && !usados.has(e.id) && dias(e.fecha, fecha) <= 1 && Number(e.monto) === monto);\n  if (conRecibo) { usados.add(conRecibo.id); continue; }\n  filas.push({ id, proveedor: 'explee', cuenta: 'wiptool.com', numero: '', fecha, monto, moneda: 'USD', estado: 'PAID', periodo: '', archivo: '', correo_url: '' });\n}\nreturn filas.length ? [{ json: { filas } }] : [];"
       }
     },
     {
@@ -76,8 +388,8 @@
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
       "position": [
-        680,
-        100
+        880,
+        400
       ],
       "parameters": {
         "url": "https://tlpnkcroqenudzgiqzum.supabase.co/rest/v1/proveedor_factura?on_conflict=id",
@@ -111,8 +423,8 @@
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
       "position": [
-        900,
-        100
+        1100,
+        400
       ],
       "executeOnce": true,
       "parameters": {
@@ -138,6 +450,11 @@
       "main": [
         [
           {
+            "node": "Recibos 60 días",
+            "type": "main",
+            "index": 0
+          },
+          {
             "node": "Depósitos de saldo",
             "type": "main",
             "index": 0
@@ -149,6 +466,11 @@
       "main": [
         [
           {
+            "node": "Todos los recibos",
+            "type": "main",
+            "index": 0
+          },
+          {
             "node": "Depósitos de saldo",
             "type": "main",
             "index": 0
@@ -156,7 +478,139 @@
         ]
       ]
     },
+    "Recibos 60 días": {
+      "main": [
+        [
+          {
+            "node": "Buscar recibos",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Todos los recibos": {
+      "main": [
+        [
+          {
+            "node": "Buscar recibos",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Buscar recibos": {
+      "main": [
+        [
+          {
+            "node": "Un ítem por recibo",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Un ítem por recibo": {
+      "main": [
+        [
+          {
+            "node": "Leer recibo",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Leer recibo": {
+      "main": [
+        [
+          {
+            "node": "Recibo de Explee",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Recibo de Explee": {
+      "main": [
+        [
+          {
+            "node": "Bajar PDF",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Bajar PDF": {
+      "main": [
+        [
+          {
+            "node": "PDF a archivo",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "PDF a archivo": {
+      "main": [
+        [
+          {
+            "node": "Subir PDF a Supabase",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Subir PDF a Supabase": {
+      "main": [
+        [
+          {
+            "node": "Filas existentes",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Filas existentes": {
+      "main": [
+        [
+          {
+            "node": "Unir recibos",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Unir recibos": {
+      "main": [
+        [
+          {
+            "node": "Guardar recibos",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
     "Depósitos de saldo": {
+      "main": [
+        [
+          {
+            "node": "Filas actuales",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Filas actuales": {
       "main": [
         [
           {

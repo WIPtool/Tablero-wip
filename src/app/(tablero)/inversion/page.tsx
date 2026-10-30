@@ -12,7 +12,8 @@ export const metadata: Metadata = { title: 'Inversión' };
 //  - Brevo: flujo n8n F24 con los correos de factura de Brevo (PDF adjunto) que llegan a misha@wiptool.com; el PDF queda en el
 //    bucket "facturas". El histórico se trajo una vez de billing-v2.brevo.com (solo con la sesión web; la API pública no las da).
 //    Las «Written off» (WRITTEN_OFF) y las sin pagar (UNPAID) se listan pero no suman.
-//  - Explee: flujo n8n F25 con las recargas de saldo de la API pública (/autogtm/billing/activity, solo inserta las nuevas).
+//  - Explee: flujo n8n F25 con los recibos de Stripe que llegan a misha@ (número y PDF; correo de facturación en Stripe = misha@
+//    desde el 2026-10-29) y, de respaldo, las recargas de la API pública (/autogtm/billing/activity, solo las que falten).
 //    El histórico se trajo una vez de la web de Explee con el número de factura de Stripe y el PDF en el bucket "facturas".
 //  - n8n: flujo n8n F26 con los recibos de Paddle de n8n Cloud (correo); el servidor del n8n propio va en la factura de AWS.
 const CUENTA_META = '1212455492189816';
@@ -36,7 +37,7 @@ const PROVEEDORES: Proveedor[] = [
   { id: 'explee', titulo: 'Explee', modo: 'cobros', pagar: 'https://explee.com/app-auto-gtm/billing', pagarTexto: 'Facturación en Explee',
     palabras: { cobro: 'recarga', cobros: 'recargas', numero: 'Factura', recibo: 'PDF', ultimo: 'Última recarga', tabla: 'Recargas y facturas', enlace: 'Ver en Explee' },
     recibo: () => 'https://explee.com/app-auto-gtm/billing',
-    fuente: 'Recargas de saldo de Explee (prospección en frío, US$0,04 por correo enviado), pagadas por Stripe con la tarjeta ••5177. Cada día a las 7:05 a. m. se revisa la API de Explee y las recargas nuevas aparecen con su fecha y monto; su número de factura y su PDF se ven en Explee, porque la API no los da. Las anteriores se trajeron una vez con su PDF. Los créditos de regalo no cuentan. Si el saldo se acaba, Explee cobra directo a la tarjeta, como los US$4,98 del 15 de septiembre: esos cobros no salen en la API.' },
+    fuente: 'Recargas de saldo de Explee (prospección en frío, US$0,04 por correo enviado) y cobros directos a la tarjeta cuando el saldo se acaba, pagados por Stripe con la tarjeta ••5177. Cada día a las 7:05 a. m. se leen los recibos de Stripe que llegan a misha@wiptool.com (número de factura y PDF) y se revisa la API de Explee por si alguna recarga no trajo recibo; esas aparecen solo con fecha y monto. Las anteriores se trajeron una vez con su PDF. Los créditos de regalo no cuentan.' },
 ];
 
 export default async function PaginaInversion({ searchParams }: { searchParams: Promise<ParametrosBusqueda> }) {
