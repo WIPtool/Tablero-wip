@@ -2,8 +2,9 @@
 // Lee los correos de cobro de Google Workspace (payments-noreply@google.com) en misha@wiptool.com con la credencial
 // "Google account" (necesita el permiso gmail.readonly), guarda el PDF de cada factura en el bucket privado "facturas"
 // de Supabase y una fila por factura (proveedor_factura) y por pago recibido o rechazado (proveedor_movimiento).
-// También lee los recibos de Anthropic (invoice+statements@mail.anthropic.com): las compras de créditos de la API van a
-// Claude Platform ('claude-platform', con la factura en PDF y el monto del correo); las suscripciones de claude.ai se saltan.
+// También lee los recibos de Anthropic (invoice+statements@mail.anthropic.com), con la factura en PDF y el monto del correo:
+// los dirigidos a la cuenta de claude.ai de una persona (PERSONAS; llegan reenviados por un filtro de Gmail) van a su
+// pestaña ('claude-misha'…); las compras de créditos de la API a misha@wiptool.com, a Claude Platform ('claude-platform').
 // Corre cada día a las 6:30 a. m. (últimos 60 días); el disparador manual carga todo el histórico.
 // Uso: node n8n/armar-f21.cjs   (después se importa en n8n.wiptool.com)
 const fs = require('fs');
@@ -35,6 +36,8 @@ const numero = (s) => {
   if (i >= 0 && s.length - i - 1 === 2) return Number(s.slice(0, i).replace(/[.,]/g, '') + '.' + s.slice(i + 1));
   return Number(s.replace(/[.,]/g, ''));
 };
+// Cuenta de claude.ai de cada persona → su pestaña en Gastos › Claude.
+const PERSONAS = { 'mikfobe@gmail.com': 'claude-misha' };
 const salida = [];
 for (const it of $input.all()) {
   const m = it.json;
@@ -50,14 +53,15 @@ for (const it of $input.all()) {
   // Recibos de Anthropic (Stripe): trae la factura (Invoice-….pdf) y el recibo (Receipt-….pdf); se guarda la factura.
   if (/@mail\.anthropic\.com/i.test(cab.from || '')) {
     const t = cuerpo || texto(m.payload, 'text/html').replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ');
-    if (!/credit purchase/i.test(t)) continue; // suscripciones de claude.ai: van en la pestaña de cada persona
+    const para = ((cab.to || '').match(/[\w.+-]+@[\w.-]+/) || [''])[0].toLowerCase();
+    const proveedor = PERSONAS[para] || (/credit purchase/i.test(t) ? 'claude-platform' : '');
+    if (!proveedor) continue; // suscripción de una cuenta que no está en PERSONAS
     const pdfs = adjuntos(m.payload);
     const pdf = pdfs.find((a) => /^invoice/i.test(a.nombre)) || pdfs[0];
     const n = ((pdf && pdf.nombre.match(/^Invoice-(.+)\.pdf$/i)) || asunto.match(/#([\d-]+)/) || [])[1] || '';
     if (!n || !pdf) continue;
     const p = t.match(/Amount paid\s+\$\s?([\d.,]+)/i) || t.match(/Total\s+\$\s?([\d.,]+)/i);
-    const para = ((cab.to || '').match(/[\w.+-]+@[\w.-]+/) || [''])[0].toLowerCase();
-    salida.push({ json: { id: m.id, proveedor: 'claude-platform', cuenta: para, fecha, correo_url, asunto, tipo: 'factura', numero: n,
+    salida.push({ json: { id: m.id, proveedor, cuenta: para, fecha, correo_url, asunto, tipo: 'factura', numero: n,
       adjunto: pdf.id, monto: p ? numero(p[1]) : null, estado: 'PAID' } });
     continue;
   }

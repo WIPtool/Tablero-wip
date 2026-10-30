@@ -16,7 +16,8 @@ export const metadata: Metadata = { title: 'Gastos' };
 //  - AWS: Lambda tablero-facturas-aws con la API Invoicing (solo facturas; AWS no informa pagos por API).
 //  - MongoDB Atlas: Lambda tablero-facturas-atlas con la API Admin v2 (estado, pagos y detalle en CSV; Atlas no da el PDF por API).
 //  - Claude: una pestaña con sub-pestañas (proveedores con el mismo grupo). Claude Platform: flujo n8n F21 desde los recibos
-//    de Anthropic (compras de créditos de la API, con la factura en PDF); las cuentas de cada persona van después.
+//    de Anthropic (compras de créditos de la API, con la factura en PDF). Claude <persona>: su suscripción de claude.ai, con los
+//    recibos que su cuenta reenvía a misha@wiptool.com (F21, PERSONAS); el histórico se trae una vez de claude.ai.
 interface Proveedor { id: string; titulo: string; grupo?: string; pagar?: string; pagarTexto?: string; fuente?: string; pagos?: boolean; proximo?: boolean; enlaceTexto?: string }
 const PROVEEDORES: Proveedor[] = [
   { id: 'google-workspace', titulo: 'Google Workspace', pagar: 'https://admin.google.com/ac/billing/accounts', pagarTexto: 'Pagar en Google', pagos: true,
@@ -27,7 +28,8 @@ const PROVEEDORES: Proveedor[] = [
     fuente: 'Facturas de la organización Aplicando en MongoDB Atlas, leídas con la API de Atlas cada día a las 7:15 a. m., con el estado de cada factura y de cada intento de cobro. Cada factura tiene su PDF y el detalle en CSV. Los PDF del histórico se trajeron una vez desde la web de Atlas; los nuevos llegan por correo a misha@wiptool.com. La factura del mes en curso aparece cuando Atlas la cierra.' },
   { id: 'claude-platform', grupo: 'Claude', titulo: 'Claude Platform', pagar: 'https://platform.claude.com/settings/billing', pagarTexto: 'Facturación en Claude',
     fuente: 'Compras de créditos de la API de Claude (Claude Platform), tomadas de los recibos de Anthropic que llegan a misha@wiptool.com; se revisan cada día a las 6:30 a. m. Cada recibo trae la factura en PDF. Los créditos se compran por adelantado: cada factura es una compra, no el consumo de un mes.' },
-  { id: 'claude-misha', grupo: 'Claude', titulo: 'Claude Misha', proximo: true },
+  { id: 'claude-misha', grupo: 'Claude', titulo: 'Claude Misha', pagar: 'https://claude.ai/settings/billing', pagarTexto: 'Facturación en Claude',
+    fuente: 'Suscripción de claude.ai de Misha (cuenta mikfobe@gmail.com): plan Pro hasta el 28 de octubre de 2026 y Max desde entonces; se renueva cada mes. Las facturas anteriores se trajeron una vez de la facturación de claude.ai; las nuevas se leen cada día a las 6:30 a. m. de los recibos de Anthropic reenviados a misha@wiptool.com.' },
   { id: 'claude-jessica', grupo: 'Claude', titulo: 'Claude Jessica', proximo: true },
   { id: 'claude-johan', grupo: 'Claude', titulo: 'Claude Johan', proximo: true },
   { id: 'claude-luis', grupo: 'Claude', titulo: 'Claude Luis', proximo: true },
