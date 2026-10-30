@@ -2,6 +2,8 @@
 // Lee los correos de cobro de Google Workspace (payments-noreply@google.com) en misha@wiptool.com con la credencial
 // "Google account" (necesita el permiso gmail.readonly), guarda el PDF de cada factura en el bucket privado "facturas"
 // de Supabase y una fila por factura (proveedor_factura) y por pago recibido o rechazado (proveedor_movimiento).
+// También lee los recibos de Anthropic (invoice+statements@mail.anthropic.com): las compras de créditos de la API van a
+// Claude Platform ('claude-platform', con la factura en PDF y el monto del correo); las suscripciones de claude.ai se saltan.
 // Corre cada día a las 6:30 a. m. (últimos 60 días); el disparador manual carga todo el histórico.
 // Uso: node n8n/armar-f21.cjs   (después se importa en n8n.wiptool.com)
 const fs = require('fs');
@@ -11,14 +13,14 @@ const CRED_GOOGLE = { id: 'jnLeMVYFho7CTP6Q', name: 'Google account' };
 const CRED_SUPABASE = { id: 'LWRuov5D7s6ILPbQ', name: 'Supabase (tablero)' };
 const SUPABASE = 'https://tlpnkcroqenudzgiqzum.supabase.co';
 const GMAIL = 'https://gmail.googleapis.com/gmail/v1/users/me/messages';
-const CONSULTA = 'from:payments-noreply@google.com subject:"Google Workspace"';
+const CONSULTA = '((from:payments-noreply@google.com subject:"Google Workspace") OR (from:mail.anthropic.com subject:receipt))';
 
 // Clasifica cada correo: factura (con su PDF), pago recibido o pago rechazado.
 const clasificar = String.raw`
-const texto = (p) => {
+const texto = (p, tipo = 'text/plain') => {
   if (!p) return '';
-  if (p.mimeType === 'text/plain' && p.body && p.body.data) return Buffer.from(p.body.data, 'base64').toString('utf8');
-  for (const h of p.parts || []) { const t = texto(h); if (t) return t; }
+  if (p.mimeType === tipo && p.body && p.body.data) return Buffer.from(p.body.data, 'base64').toString('utf8');
+  for (const h of p.parts || []) { const t = texto(h, tipo); if (t) return t; }
   return '';
 };
 const adjuntos = (p, out = []) => {
@@ -45,6 +47,20 @@ for (const it of $input.all()) {
     || asunto.match(/([a-z0-9-]+(?:\.[a-z0-9-]+)+)\s*(?:está|$)/i)
     || asunto.match(/(?:de|dominio)\s+([a-z0-9-]+(?:\.[a-z0-9-]+)+)/i) || [])[1] || '').toLowerCase();
   const correo_url = 'https://mail.google.com/mail/u/?authuser=misha@wiptool.com#all/' + m.id;
+  // Recibos de Anthropic (Stripe): trae la factura (Invoice-….pdf) y el recibo (Receipt-….pdf); se guarda la factura.
+  if (/@mail\.anthropic\.com/i.test(cab.from || '')) {
+    const t = cuerpo || texto(m.payload, 'text/html').replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ');
+    if (!/credit purchase/i.test(t)) continue; // suscripciones de claude.ai: van en la pestaña de cada persona
+    const pdfs = adjuntos(m.payload);
+    const pdf = pdfs.find((a) => /^invoice/i.test(a.nombre)) || pdfs[0];
+    const n = ((pdf && pdf.nombre.match(/^Invoice-(.+)\.pdf$/i)) || asunto.match(/#([\d-]+)/) || [])[1] || '';
+    if (!n || !pdf) continue;
+    const p = t.match(/Amount paid\s+\$\s?([\d.,]+)/i) || t.match(/Total\s+\$\s?([\d.,]+)/i);
+    const para = ((cab.to || '').match(/[\w.+-]+@[\w.-]+/) || [''])[0].toLowerCase();
+    salida.push({ json: { id: m.id, proveedor: 'claude-platform', cuenta: para, fecha, correo_url, asunto, tipo: 'factura', numero: n,
+      adjunto: pdf.id, monto: p ? numero(p[1]) : null, estado: 'PAID' } });
+    continue;
+  }
   const base = { id: m.id, proveedor: 'google-workspace', cuenta, fecha, correo_url, asunto };
   if (/rechaz|declin/i.test(asunto)) {
     const t = cuerpo.match(/(Visa|Mastercard|American Express|Amex|Discover)[^\d]{0,20}(\d{4})/i);
@@ -75,7 +91,7 @@ return { json: f, binary: { pdf: { data: b64, mimeType: 'application/pdf', fileN
 const monto = String.raw`
 const f = $('PDF a archivo').item.json;
 const bin = $('PDF a archivo').item.binary;
-const t = String($json.text || '').replace(/ /g, ' ');
+const t = String($json.text || '').replace(/\u00a0/g, ' ');
 const numero = (s) => {
   s = String(s).replace(/[^\d.,]/g, '');
   const i = Math.max(s.lastIndexOf('.'), s.lastIndexOf(','));
@@ -92,9 +108,12 @@ for (const linea of t.split(/\n/)) {
   if (/total/i.test(linea)) { total = montos[montos.length - 1].v; moneda = montos[montos.length - 1].m || moneda; }
 }
 if (total == null && ultimo) { total = ultimo.v; moneda = ultimo.m || moneda; }
-const archivo = 'google-workspace/' + (f.cuenta || 'sin-cuenta') + '/' + f.numero + '.pdf';
-return { json: { ...f, archivo, fila: { id: 'google-workspace:' + f.numero, proveedor: 'google-workspace', cuenta: f.cuenta, numero: f.numero,
-  fecha: f.fecha, monto: Number.isFinite(total) ? total : null, moneda: moneda || 'USD', archivo, correo_url: f.correo_url },
+if (f.monto != null) { total = f.monto; moneda = 'USD'; } // los recibos de Anthropic traen el monto en el correo
+const proveedor = f.proveedor || 'google-workspace';
+const archivo = proveedor + '/' + (f.cuenta || 'sin-cuenta') + '/' + f.numero + '.pdf';
+return { json: { ...f, archivo, fila: { id: proveedor + ':' + f.numero, proveedor, cuenta: f.cuenta, numero: f.numero,
+  fecha: f.fecha, monto: Number.isFinite(total) ? total : null, moneda: moneda || 'USD', archivo, correo_url: f.correo_url,
+  ...(f.estado ? { estado: f.estado } : {}) },
   texto_pdf: t.slice(0, 1500) }, binary: bin };
 `;
 

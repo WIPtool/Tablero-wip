@@ -3,7 +3,7 @@ import { haceCuanto, horasDesde } from '@/lib/formato';
 
 const FUENTES: Record<string, string> = {
   ga4: 'Google Analytics', gsc: 'Search Console', meta: 'Meta Ads', gads: 'Google Ads', brevo: 'Brevo', explee: 'Explee', kommo: 'Kommo', trm: 'TRM',
-  plataforma: 'Plataforma WIP', workspace: 'Facturas Google', 'meta-facturas': 'Cobros Meta', 'kommo-facturas': 'Pedidos Kommo', aws: 'Facturas AWS', mongodb: 'Facturas Atlas',
+  plataforma: 'Plataforma WIP', workspace: 'Facturas Google y Claude', 'meta-facturas': 'Cobros Meta', 'kommo-facturas': 'Pedidos Kommo', aws: 'Facturas AWS', mongodb: 'Facturas Atlas',
 };
 
 // Hace cuánto se cargó cada fuente. Verde: al día; ámbar: atrasada; rojo: la última carga falló.

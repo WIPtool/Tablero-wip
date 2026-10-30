@@ -29,7 +29,6 @@ const PROVEEDORES: Proveedor[] = [
     palabras: { cobro: 'factura', cobros: 'facturas', numero: 'Factura', recibo: 'PDF', ultimo: 'Última factura', tabla: 'Facturas' },
     recibo: (f) => `https://billing-v2.brevo.com/billing/api/v2/invoices/download/${encodeURIComponent(f.numero)}`,
     fuente: 'Facturas del plan Starter de Brevo (marketing, US$17 al mes). Brevo manda la factura de cada renovación a misha@wiptool.com y se revisa cada día a las 6:55 a. m.: del PDF se toman el número, el total y si se cobró. Las facturas anteriores se trajeron una vez del historial de Brevo. La de septiembre que Brevo dio por perdida («Written off») se lista pero no suma.' },
-  { id: 'anthropic', titulo: 'Claude', proximo: true },
   { id: 'explee', titulo: 'Explee', modo: 'cobros', pagar: 'https://explee.com/app-auto-gtm/billing', pagarTexto: 'Facturación en Explee',
     palabras: { cobro: 'recarga', cobros: 'recargas', numero: 'Factura', recibo: 'PDF', ultimo: 'Última recarga', tabla: 'Recargas y facturas', enlace: 'Ver en Explee' },
     recibo: () => 'https://explee.com/app-auto-gtm/billing',

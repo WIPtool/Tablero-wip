@@ -15,7 +15,9 @@ export const metadata: Metadata = { title: 'Gastos' };
 //  - Google Workspace: flujo n8n F21 desde los correos de cobro de Google (trae pagos y cobros rechazados).
 //  - AWS: Lambda tablero-facturas-aws con la API Invoicing (solo facturas; AWS no informa pagos por API).
 //  - MongoDB Atlas: Lambda tablero-facturas-atlas con la API Admin v2 (estado, pagos y detalle en CSV; Atlas no da el PDF por API).
-interface Proveedor { id: string; titulo: string; pagar?: string; pagarTexto?: string; fuente?: string; pagos?: boolean; proximo?: boolean; enlaceTexto?: string }
+//  - Claude: una pestaña con sub-pestañas (proveedores con el mismo grupo). Claude Platform: flujo n8n F21 desde los recibos
+//    de Anthropic (compras de créditos de la API, con la factura en PDF); las cuentas de cada persona van después.
+interface Proveedor { id: string; titulo: string; grupo?: string; pagar?: string; pagarTexto?: string; fuente?: string; pagos?: boolean; proximo?: boolean; enlaceTexto?: string }
 const PROVEEDORES: Proveedor[] = [
   { id: 'google-workspace', titulo: 'Google Workspace', pagar: 'https://admin.google.com/ac/billing/accounts', pagarTexto: 'Pagar en Google', pagos: true,
     fuente: 'Datos de los correos de cobro de Google que llegan a misha@wiptool.com; se revisan cada día a las 6:30 a. m. El total de cada factura se lee del PDF. El cobro es automático a la tarjeta registrada.' },
@@ -23,7 +25,15 @@ const PROVEEDORES: Proveedor[] = [
     fuente: 'Facturas de la cuenta de AWS 329792044951, leídas con la API de facturación de AWS cada día a las 7 a. m. Cada factura es el consumo del mes anterior y se cobra a la tarjeta registrada el día que se emite. AWS no informa los pagos por API: para verlos o pagar a mano, usa el botón.' },
   { id: 'mongodb', titulo: 'MongoDB Atlas', pagar: 'https://cloud.mongodb.com/v2#/org/62f2bbc72834d50bd9515f12/billing/overview', pagarTexto: 'Pagar en Atlas', pagos: true, enlaceTexto: 'Ver en Atlas',
     fuente: 'Facturas de la organización Aplicando en MongoDB Atlas, leídas con la API de Atlas cada día a las 7:15 a. m., con el estado de cada factura y de cada intento de cobro. Cada factura tiene su PDF y el detalle en CSV. Los PDF del histórico se trajeron una vez desde la web de Atlas; los nuevos llegan por correo a misha@wiptool.com. La factura del mes en curso aparece cuando Atlas la cierra.' },
+  { id: 'claude-platform', grupo: 'Claude', titulo: 'Claude Platform', pagar: 'https://platform.claude.com/settings/billing', pagarTexto: 'Facturación en Claude',
+    fuente: 'Compras de créditos de la API de Claude (Claude Platform), tomadas de los recibos de Anthropic que llegan a misha@wiptool.com; se revisan cada día a las 6:30 a. m. Cada recibo trae la factura en PDF. Los créditos se compran por adelantado: cada factura es una compra, no el consumo de un mes.' },
+  { id: 'claude-misha', grupo: 'Claude', titulo: 'Claude Misha', proximo: true },
+  { id: 'claude-jessica', grupo: 'Claude', titulo: 'Claude Jessica', proximo: true },
+  { id: 'claude-johan', grupo: 'Claude', titulo: 'Claude Johan', proximo: true },
+  { id: 'claude-luis', grupo: 'Claude', titulo: 'Claude Luis', proximo: true },
 ];
+// Pestañas de arriba: cada proveedor, o su grupo (Claude), que abre la primera sub-pestaña del grupo.
+const PESTANAS = PROVEEDORES.filter((p, i) => !p.grupo || PROVEEDORES.findIndex((q) => q.grupo === p.grupo) === i);
 
 const dosDecimales = new Intl.NumberFormat('es-CO', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 const dinero = (v: number | null | undefined, moneda = 'USD') =>
@@ -39,6 +49,8 @@ const ESTADOS: Record<string, { texto: string; clase: string }> = {
 
 const chip = (activo: boolean) =>
   `rounded-full border px-3 py-1 text-[13px] font-medium no-underline ${activo ? 'border-navy bg-navy text-white dark:border-lima dark:bg-lima dark:text-navy' : 'border-linea text-tinta hover:border-tenue'}`;
+const subchip = (activo: boolean) =>
+  `rounded-full border px-2.5 py-0.5 text-[12.5px] no-underline ${activo ? 'border-navy font-medium text-navy dark:border-lima dark:text-lima' : 'border-linea text-suave hover:border-tenue hover:text-tinta'}`;
 const boton = 'inline-flex items-center rounded-lg border border-linea px-2.5 py-1 text-[12.5px] text-suave no-underline hover:border-tenue hover:text-tinta';
 const principal = 'shrink-0 rounded-lg bg-navy px-3 py-1.5 text-[13px] font-semibold text-white no-underline dark:bg-lima dark:text-navy';
 const th = 'whitespace-nowrap border-b border-linea px-2 py-1.5 text-left text-xs font-medium text-suave';
@@ -47,6 +59,7 @@ const td = 'px-2 py-[7px]';
 export default async function PaginaGastos({ searchParams }: { searchParams: Promise<ParametrosBusqueda> }) {
   const sp = await searchParams;
   const prov = PROVEEDORES.find((p) => p.id === sp.prov) ?? PROVEEDORES[0];
+  const subpestanas = prov.grupo ? PROVEEDORES.filter((p) => p.grupo === prov.grupo) : [];
 
   return (
     <>
@@ -54,12 +67,24 @@ export default async function PaginaGastos({ searchParams }: { searchParams: Pro
         <div className="flex flex-col gap-3">
           <Encabezado pagina={buscarPagina('gastos')!} />
           <nav aria-label="Proveedor" className="flex flex-wrap gap-1.5">
-            {PROVEEDORES.map((p) => (
-              <Link key={p.id} href={`/gastos?prov=${p.id}`} aria-current={p.id === prov.id ? 'true' : undefined} className={chip(p.id === prov.id)}>
-                {p.titulo}{p.proximo ? ' · pronto' : ''}
-              </Link>
-            ))}
+            {PESTANAS.map((p) => {
+              const activo = p.grupo ? p.grupo === prov.grupo : p.id === prov.id;
+              return (
+                <Link key={p.id} href={`/gastos?prov=${p.id}`} aria-current={activo ? 'true' : undefined} className={chip(activo)}>
+                  {p.grupo ?? p.titulo}{!p.grupo && p.proximo ? ' · pronto' : ''}
+                </Link>
+              );
+            })}
           </nav>
+          {subpestanas.length > 0 && (
+            <nav aria-label={prov.grupo} className="flex flex-wrap gap-1.5">
+              {subpestanas.map((p) => (
+                <Link key={p.id} href={`/gastos?prov=${p.id}`} aria-current={p.id === prov.id ? 'true' : undefined} className={subchip(p.id === prov.id)}>
+                  {p.titulo}{p.proximo ? ' · pronto' : ''}
+                </Link>
+              ))}
+            </nav>
+          )}
         </div>
         {prov.pagar && <a href={prov.pagar} target="_blank" rel="noopener noreferrer" className={principal}>{prov.pagarTexto}</a>}
       </div>
