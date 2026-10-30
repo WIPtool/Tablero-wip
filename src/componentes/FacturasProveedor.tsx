@@ -12,11 +12,14 @@ export interface Proveedor {
   id: string; titulo: string; pagar?: string; pagarTexto?: string; fuente?: string; pagos?: boolean; proximo?: boolean;
   modo?: 'cobros';
   recibo?: (f: FacturaProveedor) => string; // enlace al recibo en la consola del proveedor
-  // Palabras de la pestaña: cobro/cobros, columna del número y botón del recibo (Meta: cobro, Transacción, Recibo PDF).
-  palabras?: { cobro: string; cobros: string; numero: string; recibo: string };
+  // Palabras de la pestaña: cobro/cobros, columna del número, botón del recibo, cifra principal y título de la tabla
+  // (Meta: cobro, Transacción, Recibo PDF, «Último cobro», «Cobros y recibos»).
+  palabras?: { cobro: string; cobros: string; numero: string; recibo: string; ultimo?: string; tabla?: string };
 }
 const PALABRAS = { cobro: 'cobro', cobros: 'cobros', numero: 'Transacción', recibo: 'Recibo PDF' };
 const mayuscula = (t: string) => t.charAt(0).toUpperCase() + t.slice(1);
+// Facturas que el proveedor emitió pero no cobró (Brevo «Written off»): se listan, pero no suman en las cifras.
+const NO_COBRADA: Record<string, string> = { WRITTEN_OFF: 'No se cobró' };
 
 const dosDecimales = new Intl.NumberFormat('es-CO', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 const pesos = new Intl.NumberFormat('es-CO', { maximumFractionDigits: 0 });
@@ -56,29 +59,32 @@ export function PaginaProveedores({ paginaId, proveedores, prov: elegido }: { pa
 // Cobros a la tarjeta, sin factura propia (Meta Ads): total por mes y enlace al recibo en la consola del proveedor.
 async function Cobros({ prov }: { prov: Proveedor }) {
   const d = await pedir<Gastos>('tablero_gastos', { p_proveedor: prov.id });
-  const k = d.kpis;
-  const p = prov.palabras ?? PALABRAS;
+  const p: NonNullable<Proveedor['palabras']> = prov.palabras ?? PALABRAS;
   const moneda = d.facturas[0]?.moneda ?? 'COP';
   const hoy = hoyBogota();
   const hace12 = new Date(Date.parse(hoy) - 365 * 86400e3).toISOString().slice(0, 10);
-  const ultimos12 = d.facturas.filter((f) => f.fecha > hace12);
+  // Las cifras salen de las facturas cobradas (tablero_gastos cuenta todo menos PENDING, también las que no se cobraron).
+  const cobradas = d.facturas.filter((f) => !NO_COBRADA[f.estado]);
+  const ultimos12 = cobradas.filter((f) => f.fecha > hace12);
+  const cobrado12 = ultimos12.length ? ultimos12.reduce((s, f) => s + Number(f.monto ?? 0), 0) : null;
+  const [ultima, penultima] = cobradas;
 
   // Total por mes de los últimos 12 meses (los meses sin cobros quedan en cero).
   const porMes = new Map<string, { total: number; cobros: number }>();
   const [anio, mes] = hoy.split('-').map(Number);
   for (let i = 0; i < 12; i++) porMes.set(new Date(Date.UTC(anio, mes - 1 - i, 1)).toISOString().slice(0, 7), { total: 0, cobros: 0 });
-  for (const f of d.facturas) {
+  for (const f of cobradas) {
     const m = porMes.get(f.fecha.slice(0, 7));
     if (m) { m.total += Number(f.monto ?? 0); m.cobros += 1; }
   }
   const mayor = Math.max(1, ...[...porMes.values()].map((m) => m.total));
 
   const cifras: Cifra[] = [
-    { etiqueta: `Último ${p.cobro}`, valor: k.ultima_factura_monto, anterior: k.penultima_factura_monto, formato: (v) => dinero(v, moneda), principal: true,
-      menorEsMejor: true, nota: k.ultima_factura ? fechaLarga(k.ultima_factura) : `Sin ${p.cobros} registrados` },
-    { etiqueta: 'Cobrado en 12 meses', valor: k.facturado_12m, formato: (v) => dinero(v, moneda) },
-    { etiqueta: 'Promedio por mes (12 meses)', valor: k.facturado_12m == null ? null : Number(k.facturado_12m) / 12, formato: (v) => dinero(v, moneda) },
-    { etiqueta: `${mayuscula(p.cobros)} en 12 meses`, valor: ultimos12.length, nota: `${k.facturas} desde el inicio` },
+    { etiqueta: p.ultimo ?? `Último ${p.cobro}`, valor: ultima?.monto ?? null, anterior: penultima?.monto ?? null, formato: (v) => dinero(v, moneda), principal: true,
+      menorEsMejor: true, nota: ultima ? fechaLarga(ultima.fecha) : `Sin ${p.cobros} todavía` },
+    { etiqueta: 'Cobrado en 12 meses', valor: cobrado12, formato: (v) => dinero(v, moneda) },
+    { etiqueta: 'Promedio por mes (12 meses)', valor: cobrado12 == null ? null : cobrado12 / 12, formato: (v) => dinero(v, moneda) },
+    { etiqueta: `${mayuscula(p.cobros)} en 12 meses`, valor: ultimos12.length, nota: `${cobradas.length} desde el inicio` },
   ];
 
   return (
@@ -102,7 +108,7 @@ async function Cobros({ prov }: { prov: Proveedor }) {
             </tbody>
           </table>
         </Tarjeta>
-        <Tarjeta titulo={`${mayuscula(p.cobros)} y ${prov.palabras ? 'facturas' : 'recibos'}`} nota={`${d.facturas.length} ${d.facturas.length === 1 ? p.cobro : p.cobros}`} col={8}>
+        <Tarjeta titulo={p.tabla ?? `${mayuscula(p.cobros)} y recibos`} nota={`${d.facturas.length} ${d.facturas.length === 1 ? p.cobro : p.cobros}`} col={8}>
           <div className="-mx-1 max-h-[560px] overflow-auto">
             <table className="w-full border-collapse text-[13px]">
               <thead className="sticky top-0 bg-superficie">
@@ -117,13 +123,18 @@ async function Cobros({ prov }: { prov: Proveedor }) {
                     <td className={`${td} whitespace-nowrap`}>{fechaLarga(f.fecha)}</td>
                     <td className={td}>{f.cuenta}</td>
                     <td className={`${td} tabular-nums text-suave`}>{f.numero}</td>
-                    <td className={`${td} whitespace-nowrap text-right tabular-nums`}>{dinero(f.monto, f.moneda)}</td>
+                    <td className={`${td} whitespace-nowrap text-right tabular-nums`}>
+                      {NO_COBRADA[f.estado] ? (
+                        <><span className="mr-1.5 rounded-full border border-linea px-2 py-0.5 text-[11.5px] text-suave">{NO_COBRADA[f.estado]}</span>
+                          <s className="text-tenue">{dinero(f.monto, f.moneda)}</s></>
+                      ) : dinero(f.monto, f.moneda)}
+                    </td>
                     <td className={`${td} whitespace-nowrap text-right`}>
                       {prov.recibo && <a className={boton} href={prov.recibo(f)} target="_blank" rel="noopener noreferrer">{p.recibo}</a>}
                     </td>
                   </tr>
                 )) : (
-                  <tr><td colSpan={5} className="px-2 py-5 text-center text-tenue">Aún no hay {p.cobros} cargados.</td></tr>
+                  <tr><td colSpan={5} className="px-2 py-5 text-center text-tenue">Aún no hay {p.cobros}.</td></tr>
                 )}
               </tbody>
             </table>
