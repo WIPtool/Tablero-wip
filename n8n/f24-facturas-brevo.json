@@ -1,0 +1,528 @@
+{
+  "name": "F24 · Facturas de Brevo (Gmail → Supabase)",
+  "nodes": [
+    {
+      "id": "a1",
+      "name": "Cada día 6:55",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [
+        0,
+        0
+      ],
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "cronExpression",
+              "expression": "55 6 * * *"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "a2",
+      "name": "Cargar histórico (a mano)",
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [
+        0,
+        200
+      ],
+      "parameters": {}
+    },
+    {
+      "id": "b1",
+      "name": "Últimos 60 días",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        220,
+        0
+      ],
+      "parameters": {
+        "jsCode": "return [{ json: { q: \"from:(brevo.com OR sendinblue.com) filename:pdf newer_than:60d\" } }];"
+      }
+    },
+    {
+      "id": "b2",
+      "name": "Todo el histórico",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        220,
+        200
+      ],
+      "parameters": {
+        "jsCode": "return [{ json: { q: \"from:(brevo.com OR sendinblue.com) filename:pdf\" } }];"
+      }
+    },
+    {
+      "id": "c1",
+      "name": "Buscar correos",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        440,
+        100
+      ],
+      "parameters": {
+        "url": "https://gmail.googleapis.com/gmail/v1/users/me/messages",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "googleOAuth2Api",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "q",
+              "value": "={{ $json.q }}"
+            },
+            {
+              "name": "maxResults",
+              "value": "500"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "credentials": {
+        "googleOAuth2Api": {
+          "id": "jnLeMVYFho7CTP6Q",
+          "name": "Google account"
+        }
+      },
+      "retryOnFail": true,
+      "maxTries": 5,
+      "waitBetweenTries": 5000
+    },
+    {
+      "id": "c2",
+      "name": "Un ítem por correo",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        660,
+        100
+      ],
+      "parameters": {
+        "jsCode": "return $input.all().flatMap((i) => (i.json.messages || []).map((m) => ({ json: { id: m.id } })));"
+      }
+    },
+    {
+      "id": "c3",
+      "name": "Leer correo",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        880,
+        100
+      ],
+      "parameters": {
+        "url": "=https://gmail.googleapis.com/gmail/v1/users/me/messages/{{ $json.id }}",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "googleOAuth2Api",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "format",
+              "value": "full"
+            }
+          ]
+        },
+        "options": {
+          "batching": {
+            "batch": {
+              "batchSize": 3,
+              "batchInterval": 2000
+            }
+          }
+        }
+      },
+      "credentials": {
+        "googleOAuth2Api": {
+          "id": "jnLeMVYFho7CTP6Q",
+          "name": "Google account"
+        }
+      },
+      "retryOnFail": true,
+      "maxTries": 5,
+      "waitBetweenTries": 5000
+    },
+    {
+      "id": "c4",
+      "name": "Adjuntos PDF",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1100,
+        100
+      ],
+      "parameters": {
+        "jsCode": "const pdfs = (p, out = []) => {\n  if (!p) return out;\n  if (p.filename && /\\.pdf$/i.test(p.filename) && p.body && p.body.attachmentId) out.push({ nombre: p.filename, adjunto: p.body.attachmentId });\n  for (const h of p.parts || []) pdfs(h, out);\n  return out;\n};\nconst salida = [];\nfor (const it of $input.all()) {\n  const m = it.json;\n  const asunto = ((m.payload.headers || []).find((h) => h.name.toLowerCase() === 'subject') || {}).value || '';\n  for (const a of pdfs(m.payload)) salida.push({ json: { id: m.id, ...a, asunto,\n    fecha: new Date(Number(m.internalDate) - 5 * 3600e3).toISOString().slice(0, 10), // hora de Colombia\n    correo_url: 'https://mail.google.com/mail/u/?authuser=misha@wiptool.com#all/' + m.id } });\n}\nreturn salida;"
+      }
+    },
+    {
+      "id": "d1",
+      "name": "Bajar PDF",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1320,
+        100
+      ],
+      "parameters": {
+        "url": "=https://gmail.googleapis.com/gmail/v1/users/me/messages/{{ $json.id }}/attachments/{{ $json.adjunto }}",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "googleOAuth2Api",
+        "options": {
+          "batching": {
+            "batch": {
+              "batchSize": 3,
+              "batchInterval": 2000
+            }
+          }
+        }
+      },
+      "credentials": {
+        "googleOAuth2Api": {
+          "id": "jnLeMVYFho7CTP6Q",
+          "name": "Google account"
+        }
+      },
+      "retryOnFail": true,
+      "maxTries": 5,
+      "waitBetweenTries": 5000
+    },
+    {
+      "id": "d2",
+      "name": "PDF a archivo",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1540,
+        100
+      ],
+      "parameters": {
+        "jsCode": "const f = $('Adjuntos PDF').item.json;\nconst b64 = String($json.data || '').replace(/-/g, '+').replace(/_/g, '/');\nreturn { json: f, binary: { pdf: { data: b64, mimeType: 'application/pdf', fileName: f.nombre, fileExtension: 'pdf' } } };",
+        "mode": "runOnceForEachItem"
+      }
+    },
+    {
+      "id": "d3",
+      "name": "Leer PDF",
+      "type": "n8n-nodes-base.extractFromFile",
+      "typeVersion": 1,
+      "position": [
+        1760,
+        100
+      ],
+      "parameters": {
+        "operation": "pdf",
+        "binaryPropertyName": "pdf",
+        "options": {}
+      }
+    },
+    {
+      "id": "d4",
+      "name": "Factura de Brevo",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1980,
+        100
+      ],
+      "parameters": {
+        "jsCode": "const origen = $('PDF a archivo').all();\nconst aNumero = (s) => {\n  s = String(s).replace(/[^\\d.,]/g, '');\n  const i = Math.max(s.lastIndexOf('.'), s.lastIndexOf(','));\n  if (i >= 0 && s.length - i - 1 === 2) return Number(s.slice(0, i).replace(/[.,]/g, '') + '.' + s.slice(i + 1));\n  return Number(s.replace(/[.,]/g, ''));\n};\nconst sib = (s) => (String(s || '').match(/SIB-\\s?(\\d{5,})/i) || [])[1];\n// Montos con moneda: $17.00, US$ 17.00, USD 17.00 y, como los escribe Brevo en español, 17,00 $ ...\nconst re = /(USD|EUR|COP|US\\$|\\$|€)\\s?(\\d[\\d.,]*\\d)|(\\d[\\d.,]*\\d)\\s?(USD|EUR|COP|US\\$|\\$|€)/g;\nconst moneda = (x) => ({ 'US$': 'USD', '$': 'USD', '€': 'EUR' })[x] || x || 'USD';\nconst salida = [];\n$input.all().forEach((it, i) => {\n  const f = origen[i].json;\n  const t = String(it.json.text || '').replace(/ /g, ' ');\n  const n = sib(t) || sib(f.nombre) || sib(f.asunto);\n  if (!n) return; // no es una factura de Brevo\n  // El total: el último monto de la última línea que dice \"total\" (no \"subtotal\"); si no hay, el mayor monto del PDF.\n  let total = null, mon = 'USD';\n  const lineas = t.split(/\\n/);\n  lineas.forEach((linea, j) => {\n    if (!/total/i.test(linea) || /sub\\s?-?total/i.test(linea)) return;\n    let montos = [...linea.matchAll(re)];\n    if (!montos.length && lineas[j + 1]) montos = [...lineas[j + 1].matchAll(re)]; // el monto en la línea siguiente\n    if (montos.length) { const x = montos[montos.length - 1]; total = aNumero(x[2] || x[3]); mon = moneda(x[1] || x[4]); }\n  });\n  if (total == null) {\n    for (const x of t.matchAll(re)) { const v = aNumero(x[2] || x[3]); if (total == null || v > total) { total = v; mon = moneda(x[1] || x[4]); } }\n  }\n  const numero = 'SIB-' + n;\n  const archivo = 'brevo/' + numero + '.pdf';\n  // Estado: el sello «PAGADO» sale también en las que Brevo dio por perdidas, así que se mira la sección de pagos.\n  // Cobrada: «Pagos -17,00 $» / «Se pagaron 17,00 $ … con MasterCard…». Dada por perdida («Written off»): «Ajustes -17,00 $» /\n  // «17,00 $ cancelado el …». Si no hay ninguna de las dos, queda sin pagar. El tablero lista las no cobradas sin sumarlas.\n  const estado = /Se pagaron|\\bPagos\\s+-|was paid|\\bPayments?\\s+-/i.test(t) ? 'PAID'\n    : /cancelad[oa] el|\\bAjustes\\s+-|\\bAdjustments?\\s+-|written off|cancell?ed on/i.test(t) ? 'WRITTEN_OFF' : 'UNPAID';\n  salida.push({ json: { numero, archivo, texto_pdf: t.slice(0, 1500), fila: { id: 'brevo:' + numero, proveedor: 'brevo', cuenta: 'Wip · Marketing', numero,\n    fecha: f.fecha, moneda: mon, estado, periodo: '', archivo, correo_url: f.correo_url || '',\n    ...(Number.isFinite(total) ? { monto: total } : {}) } }, binary: origen[i].binary });\n});\nreturn salida;"
+      }
+    },
+    {
+      "id": "d5",
+      "name": "Subir PDF a Supabase",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        2200,
+        100
+      ],
+      "parameters": {
+        "url": "=https://tlpnkcroqenudzgiqzum.supabase.co/storage/v1/object/facturas/{{ $json.archivo }}",
+        "method": "POST",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "x-upsert",
+              "value": "true"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/pdf"
+            }
+          ]
+        },
+        "sendBody": true,
+        "contentType": "binaryData",
+        "inputDataFieldName": "pdf",
+        "options": {}
+      },
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "LWRuov5D7s6ILPbQ",
+          "name": "Supabase (tablero)"
+        }
+      }
+    },
+    {
+      "id": "d6",
+      "name": "Fila de la factura",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2420,
+        100
+      ],
+      "parameters": {
+        "jsCode": "return { json: { fila: $('Factura de Brevo').item.json.fila } };",
+        "mode": "runOnceForEachItem"
+      }
+    },
+    {
+      "id": "d7",
+      "name": "Guardar factura",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        2640,
+        100
+      ],
+      "parameters": {
+        "url": "https://tlpnkcroqenudzgiqzum.supabase.co/rest/v1/proveedor_factura?on_conflict=id",
+        "method": "POST",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Prefer",
+              "value": "resolution=merge-duplicates,return=minimal"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify($json.fila) }}",
+        "options": {}
+      },
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "LWRuov5D7s6ILPbQ",
+          "name": "Supabase (tablero)"
+        }
+      }
+    },
+    {
+      "id": "f1",
+      "name": "Marcar carga",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        2860,
+        100
+      ],
+      "executeOnce": true,
+      "parameters": {
+        "url": "https://tlpnkcroqenudzgiqzum.supabase.co/rest/v1/rpc/registrar_carga",
+        "method": "POST",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ p_fuente: 'brevo-facturas', p_filas: $('Factura de Brevo').all().length }) }}",
+        "options": {}
+      },
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "LWRuov5D7s6ILPbQ",
+          "name": "Supabase (tablero)"
+        }
+      }
+    }
+  ],
+  "connections": {
+    "Cada día 6:55": {
+      "main": [
+        [
+          {
+            "node": "Últimos 60 días",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Cargar histórico (a mano)": {
+      "main": [
+        [
+          {
+            "node": "Todo el histórico",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Últimos 60 días": {
+      "main": [
+        [
+          {
+            "node": "Buscar correos",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Todo el histórico": {
+      "main": [
+        [
+          {
+            "node": "Buscar correos",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Buscar correos": {
+      "main": [
+        [
+          {
+            "node": "Un ítem por correo",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Un ítem por correo": {
+      "main": [
+        [
+          {
+            "node": "Leer correo",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Leer correo": {
+      "main": [
+        [
+          {
+            "node": "Adjuntos PDF",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Adjuntos PDF": {
+      "main": [
+        [
+          {
+            "node": "Bajar PDF",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Bajar PDF": {
+      "main": [
+        [
+          {
+            "node": "PDF a archivo",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "PDF a archivo": {
+      "main": [
+        [
+          {
+            "node": "Leer PDF",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Leer PDF": {
+      "main": [
+        [
+          {
+            "node": "Factura de Brevo",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Factura de Brevo": {
+      "main": [
+        [
+          {
+            "node": "Subir PDF a Supabase",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Subir PDF a Supabase": {
+      "main": [
+        [
+          {
+            "node": "Fila de la factura",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Fila de la factura": {
+      "main": [
+        [
+          {
+            "node": "Guardar factura",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Guardar factura": {
+      "main": [
+        [
+          {
+            "node": "Marcar carga",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "timezone": "America/Bogota",
+    "errorWorkflow": "EnFP5wE2LSfxcvxi"
+  }
+}

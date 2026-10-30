@@ -9,8 +9,9 @@ export const metadata: Metadata = { title: 'Inversión' };
 //    Meta no da el PDF por API: el botón de cada cobro abre el recibo en Meta con la sesión de quien lo pide.
 //  - Kommo: flujo n8n F23 con los correos «Tu pedido N fue pagado con éxito»; el monto se carga aparte (no viene en el correo
 //    ni en la API) y cada pedido enlaza a su factura en Kommo.
-//  - Brevo: facturas del historial de facturación de Brevo (billing-v2.brevo.com, solo con la sesión web; la API pública no
-//    las da). Cada factura enlaza a su PDF en Brevo; las «Written off» (WRITTEN_OFF) se listan pero no suman.
+//  - Brevo: flujo n8n F24 con los correos de factura de Brevo (PDF adjunto) que llegan a misha@wiptool.com; el PDF queda en el
+//    bucket "facturas". El histórico se trajo una vez de billing-v2.brevo.com (solo con la sesión web; la API pública no las da).
+//    Las «Written off» (WRITTEN_OFF) y las sin pagar (UNPAID) se listan pero no suman.
 const CUENTA_META = '1212455492189816';
 const PROVEEDORES: Proveedor[] = [
   { id: 'meta', titulo: 'Meta Ads', modo: 'cobros',
@@ -25,7 +26,7 @@ const PROVEEDORES: Proveedor[] = [
   { id: 'brevo', titulo: 'Brevo', modo: 'cobros', pagar: 'https://app.brevo.com/billing/account/plans/billing-history', pagarTexto: 'Facturación en Brevo',
     palabras: { cobro: 'factura', cobros: 'facturas', numero: 'Factura', recibo: 'PDF', ultimo: 'Última factura', tabla: 'Facturas' },
     recibo: (f) => `https://billing-v2.brevo.com/billing/api/v2/invoices/download/${encodeURIComponent(f.numero)}`,
-    fuente: 'Facturas del plan Starter de Brevo (marketing, US$17 al mes), tomadas del historial de facturas de Brevo. Brevo no da las facturas por su API pública: las nuevas se agregan desde el historial. La factura de septiembre que Brevo dio por perdida («Written off») se lista pero no suma. El botón PDF la abre en Brevo y necesita una sesión abierta.' },
+    fuente: 'Facturas del plan Starter de Brevo (marketing, US$17 al mes). Brevo manda la factura de cada renovación a misha@wiptool.com y se revisa cada día a las 6:55 a. m.: del PDF se toman el número, el total y si se cobró. Las facturas anteriores se trajeron una vez del historial de Brevo. La de septiembre que Brevo dio por perdida («Written off») se lista pero no suma.' },
   { id: 'anthropic', titulo: 'Claude', proximo: true },
   { id: 'explee', titulo: 'Explee', proximo: true },
 ];

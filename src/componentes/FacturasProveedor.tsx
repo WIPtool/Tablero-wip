@@ -2,6 +2,8 @@ import Link from 'next/link';
 import { Encabezado, Cifras, Rejilla, Tarjeta, Aviso, type Cifra } from '@/componentes/Bloques';
 import { pedir, type Gastos, type FacturaProveedor } from '@/lib/datos';
 import { fechaLarga, mesLargo } from '@/lib/formato';
+import { clienteServidor } from '@/lib/supabase/servidor';
+import { MODO_EJEMPLO } from '@/lib/config';
 import { buscarPagina } from '@/lib/paginas';
 import { hoyBogota } from '@/lib/rango';
 
@@ -18,8 +20,8 @@ export interface Proveedor {
 }
 const PALABRAS = { cobro: 'cobro', cobros: 'cobros', numero: 'Transacción', recibo: 'Recibo PDF' };
 const mayuscula = (t: string) => t.charAt(0).toUpperCase() + t.slice(1);
-// Facturas que el proveedor emitió pero no cobró (Brevo «Written off»): se listan, pero no suman en las cifras.
-const NO_COBRADA: Record<string, string> = { WRITTEN_OFF: 'No se cobró' };
+// Facturas que el proveedor emitió pero no cobró (Brevo «Written off» o sin pagar): se listan, pero no suman en las cifras.
+const NO_COBRADA: Record<string, string> = { WRITTEN_OFF: 'No se cobró', UNPAID: 'Sin pagar' };
 
 const dosDecimales = new Intl.NumberFormat('es-CO', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 const pesos = new Intl.NumberFormat('es-CO', { maximumFractionDigits: 0 });
@@ -79,6 +81,14 @@ async function Cobros({ prov }: { prov: Proveedor }) {
   }
   const mayor = Math.max(1, ...[...porMes.values()].map((m) => m.total));
 
+  // PDF guardado en el bucket privado "facturas" (Brevo): enlace firmado de 1 hora, sin depender de la sesión del proveedor.
+  const enlaces = new Map<string, string>();
+  const rutas = d.facturas.map((f) => f.archivo).filter(Boolean);
+  if (!MODO_EJEMPLO && rutas.length) {
+    const { data } = await (await clienteServidor()).storage.from('facturas').createSignedUrls(rutas, 3600);
+    for (const e of data ?? []) if (e.path && e.signedUrl) enlaces.set(e.path, e.signedUrl);
+  }
+
   const cifras: Cifra[] = [
     { etiqueta: p.ultimo ?? `Último ${p.cobro}`, valor: ultima?.monto ?? null, anterior: penultima?.monto ?? null, formato: (v) => dinero(v, moneda), principal: true,
       menorEsMejor: true, nota: ultima ? fechaLarga(ultima.fecha) : `Sin ${p.cobros} todavía` },
@@ -130,7 +140,9 @@ async function Cobros({ prov }: { prov: Proveedor }) {
                       ) : dinero(f.monto, f.moneda)}
                     </td>
                     <td className={`${td} whitespace-nowrap text-right`}>
-                      {prov.recibo && <a className={boton} href={prov.recibo(f)} target="_blank" rel="noopener noreferrer">{p.recibo}</a>}
+                      {enlaces.get(f.archivo)
+                        ? <a className={boton} href={enlaces.get(f.archivo)} target="_blank" rel="noopener noreferrer">{p.recibo}</a>
+                        : prov.recibo && <a className={boton} href={prov.recibo(f)} target="_blank" rel="noopener noreferrer">{p.recibo}</a>}
                     </td>
                   </tr>
                 )) : (
