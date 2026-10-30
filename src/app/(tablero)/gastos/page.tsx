@@ -28,7 +28,8 @@ const PROVEEDORES: Proveedor[] = [
     fuente: 'Suscripción de claude.ai de Jessica (cuenta jessica@wiptool.com): plan Pro mensual, se renueva el 16 de cada mes. Las facturas anteriores se trajeron una vez de la facturación de claude.ai (la del 13 de septiembre de 2026 fue reembolsada y no suma); las nuevas se leen cada día a las 6:30 a. m. de los recibos de Anthropic que su correo reenvía a misha@wiptool.com.' },
   { id: 'claude-johan', grupo: 'Claude', titulo: 'Claude Johan', pagar: 'https://claude.ai/settings/billing', pagarTexto: 'Facturación en Claude',
     fuente: 'Suscripción de claude.ai de Johan (cuenta jjohanvalencia112@gmail.com): plan Pro mensual, se renueva el 13 de cada mes. La factura anterior se trajo una vez de la facturación de claude.ai; las nuevas se leen cada día a las 6:30 a. m. de los recibos de Anthropic que su correo reenvía a misha@wiptool.com.' },
-  { id: 'claude-luis', grupo: 'Claude', titulo: 'Claude Luis', proximo: true },
+  { id: 'claude-luis', grupo: 'Claude', titulo: 'Claude Luis', pagar: 'https://claude.ai/settings/billing', pagarTexto: 'Facturación en Claude',
+    fuente: 'Suscripción de claude.ai de Luis (cuenta luis.fernando.varela.navarro@gmail.com): plan Pro mensual, se renueva el 8 de cada mes. Las facturas anteriores se trajeron una vez de la facturación de claude.ai; las nuevas se leen cada día a las 6:30 a. m. de los recibos de Anthropic que su correo reenvía a misha@wiptool.com.' },
 ];
 
 export default async function PaginaGastos({ searchParams }: { searchParams: Promise<ParametrosBusqueda> }) {
