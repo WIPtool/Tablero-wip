@@ -34,6 +34,7 @@ const ESTADOS: Record<string, { texto: string; clase: string; noSuma?: boolean }
   INVOICED: { texto: 'Facturada', clase: 'border-aviso text-aviso' }, FORGIVEN: { texto: 'Condonada', clase: 'border-linea text-suave' },
   FREE: { texto: 'Sin costo', clase: 'border-linea text-suave' }, PREPAID: { texto: 'Prepagada', clase: 'border-linea text-suave' },
   WRITTEN_OFF: { texto: 'No se cobró', clase: 'border-linea text-suave', noSuma: true }, UNPAID: { texto: 'Sin pagar', clase: 'border-malo/50 text-malo', noSuma: true },
+  REFUNDED: { texto: 'Reembolsada', clase: 'border-linea text-suave', noSuma: true },
   SIN_PAGAR: { texto: 'Sin pagar', clase: 'border-malo/50 text-malo' }, // deducido de los pagos y cobros fallidos; se debe, así que suma
 };
 const suma = (f: FacturaProveedor) => !ESTADOS[f.estado]?.noSuma;

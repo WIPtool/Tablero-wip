@@ -41,7 +41,7 @@ const numero = (s) => {
   return Number(s.replace(/[.,]/g, ''));
 };
 // Cuenta de claude.ai de cada persona → su pestaña en Gastos › Claude.
-const PERSONAS = { 'mikfobe@gmail.com': 'claude-misha', 'jjohanvalencia112@gmail.com': 'claude-johan' };
+const PERSONAS = { 'mikfobe@gmail.com': 'claude-misha', 'jjohanvalencia112@gmail.com': 'claude-johan', 'jessica@wiptool.com': 'claude-jessica' };
 const salida = [];
 for (const it of $input.all()) {
   const m = it.json;
