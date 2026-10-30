@@ -228,7 +228,10 @@ async function Total({ paginaId, proveedores, moneda }: { paginaId: string; prov
 
   const cifras: Cifra[] = [
     { etiqueta: 'Total en 12 meses', valor: total12, anterior: anteriores.length ? sumar(anteriores) : null, formato: (v) => dinero(v, moneda),
-      principal: true, menorEsMejor: true, nota: `${activos.length} proveedores, en ${NOMBRE_MONEDA[moneda]}${pesos12 ? ` · ≈ ${dinero(pesos12, 'COP')}` : ''}` },
+      principal: true, menorEsMejor: true, nota: `${activos.length} proveedores, en ${NOMBRE_MONEDA[moneda]}` },
+    // La nota se oculta cuando hay comparación: el total en pesos va en su propia cifra.
+    ...(pesos12 ? [{ etiqueta: 'Total en 12 meses en pesos', valor: pesos12, formato: (v: number | null | undefined) => `≈ ${dinero(v, 'COP')}`,
+      nota: 'Aproximado, con la TRM del día de cada factura' }] : []),
     { etiqueta: 'Promedio por mes (12 meses)', valor: total12 / 12, formato: (v) => dinero(v, moneda),
       nota: pesos12 ? `≈ ${dinero(pesos12 / 12, 'COP')}` : undefined },
     { etiqueta: 'Este mes', valor: sumar(suman.filter((x) => x.f.fecha.startsWith(esteMes))), formato: (v) => dinero(v, moneda),
