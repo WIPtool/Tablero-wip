@@ -25,7 +25,8 @@ const PROVEEDORES: Proveedor[] = [
   { id: 'claude-misha', grupo: 'Claude', titulo: 'Claude Misha', pagar: 'https://claude.ai/settings/billing', pagarTexto: 'Facturación en Claude',
     fuente: 'Suscripción de claude.ai de Misha (cuenta mikfobe@gmail.com): plan Pro hasta el 28 de octubre de 2026 y Max desde entonces; se renueva cada mes. Las facturas anteriores se trajeron una vez de la facturación de claude.ai; las nuevas se leen cada día a las 6:30 a. m. de los recibos de Anthropic reenviados a misha@wiptool.com.' },
   { id: 'claude-jessica', grupo: 'Claude', titulo: 'Claude Jessica', proximo: true },
-  { id: 'claude-johan', grupo: 'Claude', titulo: 'Claude Johan', proximo: true },
+  { id: 'claude-johan', grupo: 'Claude', titulo: 'Claude Johan', pagar: 'https://claude.ai/settings/billing', pagarTexto: 'Facturación en Claude',
+    fuente: 'Suscripción de claude.ai de Johan (cuenta jjohanvalencia112@gmail.com): plan Pro mensual, se renueva el 13 de cada mes. La factura anterior se trajo una vez de la facturación de claude.ai; las nuevas se leen cada día a las 6:30 a. m. de los recibos de Anthropic que su correo reenvía a misha@wiptool.com.' },
   { id: 'claude-luis', grupo: 'Claude', titulo: 'Claude Luis', proximo: true },
 ];
 
