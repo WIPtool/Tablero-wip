@@ -6,6 +6,7 @@ import { clienteServidor } from '@/lib/supabase/servidor';
 import { MODO_EJEMPLO } from '@/lib/config';
 import { buscarPagina } from '@/lib/paginas';
 import { hoyBogota } from '@/lib/rango';
+import { marcarEstadoFactura } from '@/app/(tablero)/gastos/acciones';
 
 // Facturas y cobros de proveedores con el mismo formato en Operaciones › Gastos y Marketing › Inversión, con la función
 // tablero_gastos y la tabla proveedor_factura. La primera pestaña es el Total de todos los proveedores de la página en una
@@ -39,16 +40,18 @@ const ESTADOS: Record<string, { texto: string; clase: string; noSuma?: boolean }
 };
 const suma = (f: FacturaProveedor) => !ESTADOS[f.estado]?.noSuma;
 
-// Estado de pago de las facturas que no lo traen (Google Workspace, AWS), con los pagos y cobros fallidos del proveedor:
-// pagada si es anterior al último pago; sin pagar si después del último pago hubo un cobro fallido (desde 5 días antes de la
-// factura, porque el intento de cobro puede llegar antes que ella); si no, se da por cobrada (el cobro automático no avisa).
+// Estado de cada factura: el que se puso a mano en el tablero (estado_manual) manda. Si no hay, el del proveedor; y si el
+// proveedor no lo trae (Google Workspace, AWS), se deduce de sus pagos y cobros fallidos: pagada si es anterior al último
+// pago; sin pagar si después del último pago hubo un cobro fallido (desde 5 días antes de la factura, porque el intento de
+// cobro puede llegar antes que ella); si no, se da por cobrada (el cobro automático no avisa).
 function estadosDePago(d: Gastos, prov: Proveedor): FacturaProveedor[] {
-  if (!prov.pagos) return d.facturas;
   const ultimoPago = d.movimientos.filter((m) => m.tipo === 'pago').reduce((u, m) => (m.fecha > u ? m.fecha : u), '');
   const rechazos = d.movimientos.filter((m) => m.tipo === 'rechazo' && m.fecha > ultimoPago).map((m) => m.fecha);
-  return d.facturas.map((f) => (f.estado ? f : {
-    ...f, estado: f.fecha > ultimoPago && rechazos.some((r) => r >= restarDias(f.fecha, 5)) ? 'SIN_PAGAR' : 'PAID',
-  }));
+  return d.facturas.map((f) => {
+    if (f.estado_manual) return { ...f, estado: f.estado_manual };
+    if (f.estado || !prov.pagos) return f;
+    return { ...f, estado: f.fecha > ultimoPago && rechazos.some((r) => r >= restarDias(f.fecha, 5)) ? 'SIN_PAGAR' : 'PAID' };
+  });
 }
 
 const dosDecimales = new Intl.NumberFormat('es-CO', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
@@ -389,9 +392,7 @@ function TablaFacturas({ filas, enlaces, numero, vacio, conProveedor }: {
                     {cop == null ? '—' : estado?.noSuma ? <s className="text-tenue">{dinero(cop, 'COP')}</s> : dinero(cop, 'COP')}
                   </td>
                 )}
-                <td className={td}>{f.estado ? (
-                  <span className={`whitespace-nowrap rounded-full border px-2 py-0.5 text-[12px] ${(estado ?? ESTADOS.PENDING).clase}`}>{estado?.texto ?? f.estado}</span>
-                ) : <span className="text-tenue">—</span>}</td>
+                <td className={td}><EstadoEditable f={f} /></td>
                 <td className={`${td} whitespace-nowrap text-right`}>
                   <span className="inline-flex gap-1.5">
                     {url ? (
@@ -415,6 +416,31 @@ function TablaFacturas({ filas, enlaces, numero, vacio, conProveedor }: {
         </tbody>
       </table>
     </div>
+  );
+}
+
+// Estado de la factura; al tocarlo se abre para marcarla a mano como pagada o sin pagar, o volver al estado automático.
+// Sin JavaScript en el navegador: <details> y un formulario con la acción del servidor.
+function EstadoEditable({ f }: { f: FacturaProveedor }) {
+  const estado = ESTADOS[f.estado];
+  const opciones = [['PAID', 'Pagada'], ['SIN_PAGAR', 'Sin pagar']].filter(([v]) => v !== f.estado);
+  return (
+    <details>
+      <summary className="inline-flex cursor-pointer list-none items-center gap-1 [&::-webkit-details-marker]:hidden"
+        title={f.estado_manual ? `Marcada a mano${f.estado_manual_por ? ' por ' + f.estado_manual_por : ''}. Toca para cambiar.` : 'Toca para cambiarlo a mano'}>
+        {f.estado
+          ? <span className={`whitespace-nowrap rounded-full border px-2 py-0.5 text-[12px] ${(estado ?? ESTADOS.PENDING).clase}`}>{estado?.texto ?? f.estado}</span>
+          : <span className="text-tenue">—</span>}
+        {f.estado_manual && <span className="whitespace-nowrap text-[11px] text-suave">a mano</span>}
+      </summary>
+      <form action={marcarEstadoFactura} className="mt-1.5 flex flex-wrap gap-1">
+        <input type="hidden" name="id" value={f.id} />
+        {opciones.map(([v, texto]) => (
+          <button key={v} type="submit" name="estado" value={v} className={boton}>Marcar {texto.toLowerCase()}</button>
+        ))}
+        {f.estado_manual && <button type="submit" name="estado" value="" className={boton}>Volver al automático</button>}
+      </form>
+    </details>
   );
 }
 
