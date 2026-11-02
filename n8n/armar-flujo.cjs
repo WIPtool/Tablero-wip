@@ -65,7 +65,7 @@ const RUTA_BREVO = 'brevo-kommo-e916b8396dcee1b7424b';
 const RUTA_GADS = 'gads-7c1e4b9a2f6d48e3a51c';
 
 const lotes = { batching: { batch: { batchSize: 1, batchInterval: 300 } } };
-// Reintentos de las llamadas a Claude (sobrecarga o error pasajero): 3 intentos con 5 s de espera.
+// Reintentos de llamadas a servicios que fallan de vez en cuando (Claude, Explee): 3 intentos con 5 s de espera.
 const REINTENTOS = { retryOnFail: true, maxTries: 3, waitBetweenTries: 5000 };
 const guardar = (id, posicion) => ({
   id, name: 'Guardar en Supabase', type: 'n8n-nodes-base.httpRequest', typeVersion: 4.2, position: posicion,
@@ -408,13 +408,15 @@ const f12 = {
     codigo('a1f0c0de-0015-4000-8000-000000000015', 'Filas Brevo', [740, 700], 'filas-brevo.js', false),
 
     codigoTexto('a1f0c0de-0016-4000-8000-000000000016', 'Trabajos Explee', [260, 900], EXPLEE['Trabajos Explee']),
-    http('a1f0c0de-0017-4000-8000-000000000017', 'Campañas Explee', [420, 900], {
+    // Explee a veces no responde (503 o se agota el tiempo): 3 intentos y, si sigue fallando, el error pasa como dato
+    // y "Pedidos Explee"/"Filas Explee" saltan Explee esa hora sin frenar el resto de la corrida.
+    { ...http('a1f0c0de-0017-4000-8000-000000000017', 'Campañas Explee', [420, 900], {
       parameters: { authentication: 'genericCredentialType', genericAuthType: 'httpHeaderAuth' },
-      credentials: CRED.explee }),
+      credentials: CRED.explee }), onError: 'continueRegularOutput', ...REINTENTOS },
     codigoTexto('a1f0c0de-0018-4000-8000-000000000018', 'Pedidos Explee', [580, 900], EXPLEE['Pedidos Explee']),
-    http('a1f0c0de-0019-4000-8000-000000000019', 'Consultar Explee', [740, 900], {
+    { ...http('a1f0c0de-0019-4000-8000-000000000019', 'Consultar Explee', [740, 900], {
       parameters: { authentication: 'genericCredentialType', genericAuthType: 'httpHeaderAuth' },
-      credentials: CRED.explee }),
+      credentials: CRED.explee }), onError: 'continueRegularOutput', ...REINTENTOS },
     codigoTexto('a1f0c0de-0020-4000-8000-000000000020', 'Filas Explee', [900, 900], EXPLEE['Filas Explee']),
 
     codigoTexto('a1f0c0de-0021-4000-8000-000000000021', 'Trabajos Kommo', [260, 1100], KOMMO['Trabajos Kommo']),

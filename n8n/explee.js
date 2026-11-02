@@ -10,6 +10,9 @@ return [{ json: { url: 'https://api.explee.com/public/api/v1/autogtm/campaigns',
 // == Pedidos Explee (Code, una vez para todos los elementos)
 // Con la lista de campañas arma los pedidos: el total acumulado de cada campaña y los leads calientes recientes.
 const BASE = 'https://api.explee.com/public/api/v1/autogtm';
+// Si Explee no respondió (los nodos HTTP de Explee siguen con el error tras 3 intentos), esta hora se salta Explee
+// sin frenar el resto de F12; la carga siguiente trae los totales acumulados y los leads de los últimos 3 días.
+if ($input.first().json.error) return [];
 const campanas = $input.first().json.campaigns || [];
 const manual = $('Trabajos Explee').first().json.manual;
 const desde = manual ? '2020-01-01T00:00:00Z' : new Date(Date.now() - 3 * 86400000).toISOString();
@@ -39,8 +42,10 @@ const propio = (texto) => {
 const nombres = {};
 const acumulado = [];
 const leads = new Map();
+let fallos = 0;
 respuestas.forEach((r, i) => {
   const p = pedidos[i].json;
+  if (r.json.error) { fallos++; return; } // Explee no respondió este pedido: se omite (los totales son acumulados)
   if (p.tipo === 'analitica') {
     nombres[p.campana_id] = p.campana;
     const a = r.json;
@@ -53,6 +58,8 @@ respuestas.forEach((r, i) => {
     for (const l of lista) leads.set(`${l.email}|${l.company_domain}`, l);
   }
 });
+
+if (fallos === respuestas.length) return []; // Explee no respondió nada: no se guarda nada esta hora
 
 const filasLeads = [...leads.entries()].map(([id, l]) => ({
   fecha: l.became_hot_at ? dia.format(new Date(l.became_hot_at)) : null, lead_id: id,
