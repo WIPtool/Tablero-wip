@@ -164,6 +164,7 @@ export interface Descargas {
   ultimo_dia: { android: string | null; ios: string | null };
   kpis: Kpis;
   serie: { fecha: string; android: number; ios: number; total: number }[];
+  por_app: { app: string; tienda: 'android' | 'ios'; descargas: number; descargas_ant: number; actualizaciones: number }[];
   por_pais: { pais: string; descargas: number; android: number; ios: number; descargas_ant: number }[];
 }
 

@@ -48,6 +48,15 @@ export default async function PaginaDescargas({ searchParams }: { searchParams: 
             { campo: 'ios', etiqueta: 'iOS', forma: 'columnas', color: 'var(--serie-2)' },
           ]} />
         </Tarjeta>
+        <Tarjeta titulo="Por app" nota="La cuenta de las tiendas tiene la app de WIP y las de clientes (SBS)">
+          <Tabla total filas={d.por_app.map((f) => ({ ...f, tienda: f.tienda === 'ios' ? 'iOS' : 'Android' }))} vacio="Sin descargas en este periodo." columnas={[
+            { campo: 'app', etiqueta: 'App' },
+            { campo: 'tienda', etiqueta: 'Tienda' },
+            { campo: 'descargas', etiqueta: 'Descargas', tipo: 'numero', barra: true },
+            { campo: 'descargas_ant', etiqueta: 'Periodo anterior', tipo: 'numero' },
+            { campo: 'actualizaciones', etiqueta: 'Actualizaciones', tipo: 'numero' },
+          ]} />
+        </Tarjeta>
         <Tarjeta titulo="Por país">
           <Tabla total limite={15} filas={d.por_pais} vacio="Sin descargas en este periodo." columnas={[
             { campo: 'pais', etiqueta: 'País' },

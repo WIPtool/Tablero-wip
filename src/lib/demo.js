@@ -355,6 +355,8 @@ function descargas({ p_desde, p_hasta }) {
       actualizaciones: Math.round((a + i) * 2.4), actualizaciones_ant: Math.round((a + i) * 2.2), desinstalaciones: Math.round(a * 0.3), desinstalaciones_ant: Math.round(a * 0.33),
       por_dia: Math.round((a + i) / serie.length), por_dia_ant: Math.round((a + i) * 0.92 / serie.length) },
     serie,
+    por_app: [['WIP Colaboradores', 'android', a * 0.8], ['WIP Colaboradores', 'ios', i * 0.3], ['SBS Seguros Asistencia', 'ios', i * 0.7], ['SBS Seguros Asistencia', 'android', a * 0.2]]
+      .map(([app, tienda, n]) => ({ app, tienda, descargas: Math.round(n), descargas_ant: Math.round(n * 0.9), actualizaciones: Math.round(n * 2) })),
     por_pais: [['CO', 0.7, 0.6], ['MX', 0.12, 0.15], ['PE', 0.08, 0.1], ['EC', 0.05, 0.08]].map(([pais, ta, ti]) =>
       ({ pais, android: Math.round(a * ta), ios: Math.round(i * ti), descargas: Math.round(a * ta) + Math.round(i * ti), descargas_ant: Math.round((a * ta + i * ti) * 0.9) })),
   };
