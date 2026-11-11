@@ -49,7 +49,8 @@ async function android(s, desde) {
 async function ios(s, dias) {
   const t = Math.floor(Date.now() / 1000), m = new Map();
   const k = jwt({ alg: 'ES256', kid: s.appstore_key_id, typ: 'JWT' }, { iss: s.appstore_issuer_id, iat: t, exp: t + 1100, aud: 'appstoreconnect-v1' },
-    s.appstore_private_key.replace(/\\n/g, '\n'), true);
+    // la consola de Secrets Manager cambia los saltos de línea por espacios: se rearma el PEM
+    '-----BEGIN PRIVATE KEY-----\n' + s.appstore_private_key.replace(/-----[^-]+-----|\\n|\s/g, '').match(/.{1,64}/g).join('\n') + '\n-----END PRIVATE KEY-----', true);
   for (let n = 1; n <= Math.min(dias, 365); n++) {
     const f = dia(n), z = await pedir('https://api.appstoreconnect.apple.com/v1/salesReports?filter[frequency]=DAILY&filter[reportType]=SALES' +
       '&filter[reportSubType]=SUMMARY&filter[version]=1_1&filter[vendorNumber]=' + s.appstore_vendor_number + '&filter[reportDate]=' + f,
@@ -73,15 +74,19 @@ exports.handler = async (event) => {
   const k = s['supabase_secret_key misha@wiptool.com'], dias = +(event || {}).dias || 10;
   const sb = (ruta, cuerpo, extra = {}) => pedir(SB + ruta, { method: 'POST', body: JSON.stringify(cuerpo),
     headers: { apikey: k, 'Content-Type': 'application/json', ...extra } });
-  try {
-    const filas = [...(s.play_bucket && s.play_cuenta_servicio_json ? await android(s, dia(dias)) : []),
-      ...(s.appstore_key_id && s.appstore_private_key && s.appstore_vendor_number ? await ios(s, dias) : [])];
-    for (let i = 0; i < filas.length; i += 1000)
-      await sb('/rest/v1/app_descarga_diaria?on_conflict=fecha,tienda,app,pais', filas.slice(i, i + 1000), { Prefer: 'resolution=merge-duplicates,return=minimal' });
-    await sb('/rest/v1/rpc/registrar_carga', { p_fuente: 'apps', p_filas: filas.length });
-    return { filas: filas.length, android: filas.filter((f) => f.tienda === 'android').length, ios: filas.filter((f) => f.tienda === 'ios').length };
-  } catch (e) {
-    await sb('/rest/v1/rpc/registrar_error', { p_fuente: 'apps', p_mensaje: String(e.message).slice(0, 400) });
-    throw e;
+  // Cada tienda por separado: si una falla, la otra igual se carga y el error queda en cargas.
+  const res = {}, errores = [];
+  for (const [t, ok, f] of [['android', s.play_bucket && s.play_cuenta_servicio_json, () => android(s, dia(dias))],
+    ['ios', s.appstore_key_id && s.appstore_private_key && s.appstore_vendor_number, () => ios(s, dias)]]) {
+    if (!ok) continue;
+    try {
+      const filas = await f();
+      for (let i = 0; i < filas.length; i += 1000)
+        await sb('/rest/v1/app_descarga_diaria?on_conflict=fecha,tienda,app,pais', filas.slice(i, i + 1000), { Prefer: 'resolution=merge-duplicates,return=minimal' });
+      res[t] = filas.length;
+    } catch (e) { errores.push(t + ': ' + e.message); }
   }
+  if (errores.length) await sb('/rest/v1/rpc/registrar_error', { p_fuente: 'apps', p_mensaje: errores.join(' | ').slice(0, 400) });
+  else await sb('/rest/v1/rpc/registrar_carga', { p_fuente: 'apps', p_filas: (res.android || 0) + (res.ios || 0) });
+  return { ...res, errores };
 };
