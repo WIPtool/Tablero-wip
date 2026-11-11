@@ -4,7 +4,7 @@ import { GraficaPaneles } from '@/componentes/GraficaPaneles';
 import { SelectorPeriodo } from '@/componentes/SelectorPeriodo';
 import { Tabla } from '@/componentes/Tabla';
 import { pedir, type Descargas } from '@/lib/datos';
-import { fechaLarga } from '@/lib/formato';
+import { fechaLarga, mesLargo } from '@/lib/formato';
 import { anterior, describir, leerRango, paramsPeriodo, type ParametrosBusqueda } from '@/lib/rango';
 import { buscarPagina } from '@/lib/paginas';
 
@@ -18,8 +18,12 @@ export default async function PaginaDescargas({ searchParams }: { searchParams: 
   const k = d.kpis, t = d.totales;
   // Android trae sus contadores acumulados en los informes de Play; mientras no lleguen, la cifra queda pendiente.
   const sinAndroid = t.android === null ? 'Esperando a Google Play' : null;
+  // iOS no tiene instalaciones activas: se usan los dispositivos con al menos una sesión en el último mes completo, de la API
+  // de analíticas de Apple (solo quienes comparten analíticas).
+  const sinIos = t.ios_activos === null ? 'Esperando a Apple' : null;
+  const notaIos = t.ios_activos_mes ? `Dispositivos con uso en ${mesLargo(t.ios_activos_mes)} (solo quienes comparten analíticas)` : undefined;
   const cifraTotal = (etiqueta: string, valor: number | null, pendiente: string | null, nota?: string): Cifra =>
-    pendiente ? { etiqueta, pendiente, nota } : { etiqueta, valor, nota: etiqueta.includes('Android') && t.android_fecha ? `Al ${fechaLarga(t.android_fecha)}` : undefined };
+    pendiente ? { etiqueta, pendiente, nota } : { etiqueta, valor, nota: nota ?? (etiqueta.includes('Android') && t.android_fecha ? `Al ${fechaLarga(t.android_fecha)}` : undefined) };
   const ultimo = (tienda: string, f: string | null) => f ? <> {tienda}: datos hasta el {fechaLarga(f)}.</> : <> {tienda}: aún sin datos.</>;
 
   return (
@@ -36,9 +40,10 @@ export default async function PaginaDescargas({ searchParams }: { searchParams: 
         cifraTotal('Descargas totales · Android', t.android, sinAndroid),
         cifraTotal('Descargas totales · iOS', t.ios, null),
         cifraTotal('Descargas totales · Ambas', t.android === null ? null : t.android + t.ios, sinAndroid),
-        cifraTotal('Instalaciones activas · Android', t.android_activos, sinAndroid),
-        cifraTotal('Instalaciones activas · iOS', null, 'No disponible', 'Apple no informa instalaciones activas por su API'),
-        cifraTotal('Instalaciones activas · Ambas', null, 'No disponible', 'Falta iOS'),
+        cifraTotal('Activas · Android', t.android_activos, sinAndroid),
+        cifraTotal('Activas · iOS', t.ios_activos, sinIos, notaIos),
+        cifraTotal('Activas · Ambas', t.android_activos === null || t.ios_activos === null ? null : t.android_activos + t.ios_activos,
+          sinAndroid ?? sinIos, 'Suma de las dos medidas de arriba'),
       ]} />
       <h2 className="text-[13px] font-semibold uppercase tracking-wide text-suave">En el periodo</h2>
       <Cifras items={[
