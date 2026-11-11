@@ -48,7 +48,7 @@ export default async function PaginaDescargas({ searchParams }: { searchParams: 
             { campo: 'ios', etiqueta: 'iOS', forma: 'columnas', color: 'var(--serie-2)' },
           ]} />
         </Tarjeta>
-        <Tarjeta titulo="Por app" nota="La cuenta de las tiendas tiene la app de WIP y las de clientes (SBS)">
+        <Tarjeta titulo="Por tienda" nota="App WIP Colaboradores (Android: com.asiste). Las apps de SBS de la misma cuenta no se cargan">
           <Tabla total filas={d.por_app.map((f) => ({ ...f, tienda: f.tienda === 'ios' ? 'iOS' : 'Android' }))} vacio="Sin descargas en este periodo." columnas={[
             { campo: 'app', etiqueta: 'App' },
             { campo: 'tienda', etiqueta: 'Tienda' },
