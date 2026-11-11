@@ -161,6 +161,8 @@ export interface ServiciosDias {
 
 // Operaciones › Descargas de la app (supabase/033_descargas_apps.sql).
 export interface Descargas {
+  // Desde el lanzamiento: Android con los contadores acumulados de Play (null hasta que llegan); iOS sin activas.
+  totales: { android: number | null; android_activos: number | null; android_fecha: string | null; ios: number; ios_activos: null };
   ultimo_dia: { android: string | null; ios: string | null };
   kpis: Kpis;
   serie: { fecha: string; android: number; ios: number; total: number }[];

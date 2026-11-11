@@ -1,5 +1,5 @@
 import type { Metadata } from 'next';
-import { Encabezado, Cifras, Rejilla, Tarjeta, Leyenda, Aviso } from '@/componentes/Bloques';
+import { Encabezado, Cifras, Rejilla, Tarjeta, Leyenda, Aviso, type Cifra } from '@/componentes/Bloques';
 import { GraficaPaneles } from '@/componentes/GraficaPaneles';
 import { SelectorPeriodo } from '@/componentes/SelectorPeriodo';
 import { Tabla } from '@/componentes/Tabla';
@@ -15,7 +15,11 @@ export const metadata: Metadata = { title: 'Descargas de la app' };
 export default async function PaginaDescargas({ searchParams }: { searchParams: Promise<ParametrosBusqueda> }) {
   const rango = leerRango(await searchParams);
   const d = await pedir<Descargas>('tablero_descargas', paramsPeriodo(rango));
-  const k = d.kpis;
+  const k = d.kpis, t = d.totales;
+  // Android trae sus contadores acumulados en los informes de Play; mientras no lleguen, la cifra queda pendiente.
+  const sinAndroid = t.android === null ? 'Esperando a Google Play' : null;
+  const cifraTotal = (etiqueta: string, valor: number | null, pendiente: string | null, nota?: string): Cifra =>
+    pendiente ? { etiqueta, pendiente, nota } : { etiqueta, valor, nota: etiqueta.includes('Android') && t.android_fecha ? `Al ${fechaLarga(t.android_fecha)}` : undefined };
   const ultimo = (tienda: string, f: string | null) => f ? <> {tienda}: datos hasta el {fechaLarga(f)}.</> : <> {tienda}: aún sin datos.</>;
 
   return (
@@ -27,6 +31,16 @@ export default async function PaginaDescargas({ searchParams }: { searchParams: 
           <span className="text-xs text-suave">{describir(rango)} · comparado con {describir(anterior(rango))}</span>
         </div>
       </div>
+      <h2 className="text-[13px] font-semibold uppercase tracking-wide text-suave">Desde el lanzamiento (no depende del periodo)</h2>
+      <Cifras items={[
+        cifraTotal('Descargas totales · Android', t.android, sinAndroid),
+        cifraTotal('Descargas totales · iOS', t.ios, null),
+        cifraTotal('Descargas totales · Ambas', t.android === null ? null : t.android + t.ios, sinAndroid),
+        cifraTotal('Instalaciones activas · Android', t.android_activos, sinAndroid),
+        cifraTotal('Instalaciones activas · iOS', null, 'No disponible', 'Apple no informa instalaciones activas por su API'),
+        cifraTotal('Instalaciones activas · Ambas', null, 'No disponible', 'Falta iOS'),
+      ]} />
+      <h2 className="text-[13px] font-semibold uppercase tracking-wide text-suave">En el periodo</h2>
       <Cifras items={[
         { etiqueta: 'Descargas', valor: k.descargas, anterior: k.descargas_ant, principal: true },
         { etiqueta: 'Android (Google Play)', valor: k.android, anterior: k.android_ant },

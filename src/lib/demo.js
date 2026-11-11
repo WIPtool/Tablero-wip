@@ -350,6 +350,7 @@ function descargas({ p_desde, p_hasta }) {
     const android = Math.round(20 + x * 25), ios = Math.round(6 + y * 10); return { fecha, android, ios, total: android + ios }; });
   const a = serie.reduce((t, x) => t + x.android, 0), i = serie.reduce((t, x) => t + x.ios, 0);
   return {
+    totales: { android: 3120, android_activos: 1480, android_fecha: sumarDias(hoyBogota(), -2), ios: 429, ios_activos: null },
     ultimo_dia: { android: sumarDias(hoyBogota(), -2), ios: sumarDias(hoyBogota(), -1) },
     kpis: { descargas: a + i, descargas_ant: Math.round((a + i) * 0.92), android: a, android_ant: Math.round(a * 0.9), ios: i, ios_ant: Math.round(i * 0.97),
       actualizaciones: Math.round((a + i) * 2.4), actualizaciones_ant: Math.round((a + i) * 2.2), desinstalaciones: Math.round(a * 0.3), desinstalaciones_ant: Math.round(a * 0.33),
