@@ -36,7 +36,7 @@ async function android(s, desde) {
     const c = cab.split(',');
     for (const l of lineas) {
       const v = Object.fromEntries(l.split(',').map((x, i) => [c[i], x]));
-      if (v.Date >= desde) filas.push({ fecha: v.Date, tienda: 'android', app: v['Package Name'], pais: v.Country || '',
+      if (v.Date >= desde) filas.push({ fecha: v.Date, tienda: 'android', app: 'com.asiste', pais: v.Country || '',
         descargas: +v['Daily User Installs'] || 0, actualizaciones: +v['Daily Device Upgrades'] || 0, desinstalaciones: +v['Daily User Uninstalls'] || 0,
         total_usuarios: entero(v['Total User Installs']), activos: entero(v['Active Device Installs']) });
     }
