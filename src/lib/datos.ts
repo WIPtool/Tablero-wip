@@ -159,6 +159,14 @@ export interface ServiciosDias {
   por_estado: { estado: string; servicios: number; servicios_ant: number }[];
 }
 
+// Operaciones › Descargas de la app (supabase/033_descargas_apps.sql).
+export interface Descargas {
+  ultimo_dia: { android: string | null; ios: string | null };
+  kpis: Kpis;
+  serie: { fecha: string; android: number; ios: number; total: number }[];
+  por_pais: { pais: string; descargas: number; android: number; ios: number; descargas_ant: number }[];
+}
+
 // Operaciones › Gastos (supabase/027_facturas_proveedores.sql): una pestaña por proveedor.
 export interface FacturaProveedor { id: string; cuenta: string; numero: string; fecha: string; periodo: string; estado: string; monto: number | null; moneda: string; archivo: string; archivo_csv?: string; correo_url: string;
   estado_manual?: string; estado_manual_por?: string } // estado puesto a mano en el tablero (manda sobre el automático)

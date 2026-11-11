@@ -345,6 +345,22 @@ function serviciosDias({ p_desde, p_hasta }) {
 }
 demo.tablero_servicios_dias = serviciosDias;
 
+function descargas({ p_desde, p_hasta }) {
+  const serie = dias(p_desde, p_hasta).map((fecha) => { const x = azar('da' + fecha)(), y = azar('di' + fecha)();
+    const android = Math.round(20 + x * 25), ios = Math.round(6 + y * 10); return { fecha, android, ios, total: android + ios }; });
+  const a = serie.reduce((t, x) => t + x.android, 0), i = serie.reduce((t, x) => t + x.ios, 0);
+  return {
+    ultimo_dia: { android: sumarDias(hoyBogota(), -2), ios: sumarDias(hoyBogota(), -1) },
+    kpis: { descargas: a + i, descargas_ant: Math.round((a + i) * 0.92), android: a, android_ant: Math.round(a * 0.9), ios: i, ios_ant: Math.round(i * 0.97),
+      actualizaciones: Math.round((a + i) * 2.4), actualizaciones_ant: Math.round((a + i) * 2.2), desinstalaciones: Math.round(a * 0.3), desinstalaciones_ant: Math.round(a * 0.33),
+      por_dia: Math.round((a + i) / serie.length), por_dia_ant: Math.round((a + i) * 0.92 / serie.length) },
+    serie,
+    por_pais: [['CO', 0.7, 0.6], ['MX', 0.12, 0.15], ['PE', 0.08, 0.1], ['EC', 0.05, 0.08]].map(([pais, ta, ti]) =>
+      ({ pais, android: Math.round(a * ta), ios: Math.round(i * ti), descargas: Math.round(a * ta) + Math.round(i * ti), descargas_ant: Math.round((a * ta + i * ti) * 0.9) })),
+  };
+}
+demo.tablero_descargas = descargas;
+
 // Costos de marketing (ejemplo con los valores revisados el 19 de octubre de 2026).
 function costos(p) {
   const trm = 3950;

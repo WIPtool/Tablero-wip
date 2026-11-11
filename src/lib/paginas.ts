@@ -25,6 +25,7 @@ export const PAGINAS: Pagina[] = [
   { id: 'inversion', titulo: 'Inversión', sub: 'Facturas y cobros de la pauta y de las herramientas de marketing: Meta, Kommo, n8n, Brevo y más' },
   { id: 'links', titulo: 'Links de interés', sub: 'Accionadores que suman datos en Analytics y propuestas enviadas a clientes' },
   { id: 'servicios', titulo: 'Servicios', sub: 'Servicios que se crean cada mes en la plataforma WIP, en total y por cliente', seccion: 'operaciones' },
+  { id: 'descargas', titulo: 'Descargas de la app', menu: 'Descargas app', sub: 'Descargas de la app WIP en Google Play (Android) y App Store (iOS), por día y por país', seccion: 'operaciones' },
   { id: 'gastos', titulo: 'Gastos', sub: 'Facturas, pagos y cobros rechazados de los proveedores de la plataforma', seccion: 'operaciones' },
   { id: 'pendientes-misha', titulo: 'Pendientes Misha', sub: 'Correos que le piden algo a Misha, resumidos por Claude: hechos, descartados o con una instrucción para Claude', seccion: 'operaciones' },
 ];
