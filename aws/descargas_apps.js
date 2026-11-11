@@ -7,7 +7,7 @@
 //            producto 1*, actualizaciones = 7*. Apple solo guarda los informes diarios de los últimos 365 días.
 // Claves en el secreto "tablero-wip": play_bucket, play_cuenta_servicio_json, appstore_issuer_id, appstore_key_id,
 // appstore_private_key, appstore_vendor_number (si faltan las de una tienda, esa tienda se salta sin error).
-// Corrida diaria: últimos 10 días.  Histórico a mano: invocar con {"dias": 365}.
+// Corrida diaria 7:30 a. m. Bogotá (regla "tablero-descargas-apps-diario", cron(30 12 * * ? *) UTC): últimos 10 días.  Histórico a mano: invocar con {"dias": 365}.
 // Despliegue: pila de CloudFormation "tablero-descargas-apps" con este código en línea (Code.ZipFile, index.js, máx. 4.096
 // caracteres: se sube minificado con el terser de Next, ~3.970), regla diaria y rol tablero-facturas-aws.
 const crypto = require('crypto');
